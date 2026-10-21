@@ -1,0 +1,13 @@
+{
+  "appId": "com.ping.sms",
+  "appName": "Ping",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": true,
+    "backgroundColor": "#0B57D0"
+  }
+}
