@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   MessageSquare,
@@ -22,7 +22,16 @@ import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal.tsx';
 import { CreditsModal } from './components/CreditsModal.tsx';
 import { BottomTabs } from './components/BottomTabs.tsx';
+import { ProfilePhotoEditor } from './components/ProfilePhotoEditor.tsx';
 import { spring, useIsDesktop, useIsWide } from './motion.ts';
+import { handleBackPress, useBackHandler } from './backStack.ts';
+import { smsBridge } from './services/smsBridge.ts';
+
+// Heavy screens only re-render when their own data changes, not when a menu opens or closes
+const ConversationListMemo = React.memo(ConversationList);
+const TopSearchBarMemo = React.memo(TopSearchBar);
+const BottomTabsMemo = React.memo(BottomTabs);
+const ChatViewMemo = React.memo(ChatView);
 
 const AppContent: React.FC = () => {
   const {
@@ -33,6 +42,10 @@ const AppContent: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
     notifications,
+    filter,
+    setFilter,
+    searchQuery,
+    setSearchQuery,
   } = useSMS();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -47,6 +60,47 @@ const AppContent: React.FC = () => {
 
   const otpNotifCount = notifications.filter((n) => n.otpCode).length;
 
+  // Stable callbacks: new function objects every render would defeat React.memo above
+  const openDrawer = useCallback(() => setDrawerOpen(true), []);
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
+  const openNewChat = useCallback(() => setNewChatOpen(true), []);
+  const openSimulator = useCallback(() => setSimulatorOpen(true), []);
+  const openShade = useCallback(() => setShadeOpen(true), []);
+  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openPrivacy = useCallback(() => setPrivacyOpen(true), []);
+  const openCredits = useCallback(() => setCreditsOpen(true), []);
+  const leaveChat = useCallback(() => selectConversation(null), [selectConversation]);
+
+  // Android back button: close the top-most thing first (menu / dialog / chat / tab / search)
+  useBackHandler(drawerOpen, closeDrawer);
+  useBackHandler(newChatOpen, useCallback(() => setNewChatOpen(false), []));
+  useBackHandler(simulatorOpen, useCallback(() => setSimulatorOpen(false), []));
+  useBackHandler(shadeOpen, useCallback(() => setShadeOpen(false), []));
+  useBackHandler(settingsOpen, useCallback(() => setSettingsOpen(false), []));
+  useBackHandler(privacyOpen, useCallback(() => setPrivacyOpen(false), []));
+  useBackHandler(creditsOpen, useCallback(() => setCreditsOpen(false), []));
+  useBackHandler(!!activeConversationId, leaveChat);
+  useBackHandler(filter !== 'all', useCallback(() => setFilter('all'), [setFilter]));
+  useBackHandler(searchQuery.trim() !== '', useCallback(() => setSearchQuery(''), [setSearchQuery]));
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    smsBridge
+      .listenToBack(() => {
+        // Nothing left to close: behave like a normal back press on the home screen
+        if (!handleBackPress()) smsBridge.minimizeApp();
+      })
+      .then((unsub) => {
+        if (cancelled) unsub();
+        else unsubscribe = unsub;
+      });
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-m3-surface dark:bg-m3-d0 text-m3-on-surface dark:text-m3-on-surface-dk relative">
       {/* Heads-up Android Notification Banner with Copy OTP Action */}
@@ -55,29 +109,30 @@ const AppContent: React.FC = () => {
       {/* Modals and Drawers */}
       <NavigationDrawer
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onOpenSimulator={() => setSimulatorOpen(true)}
-        onOpenNotifications={() => setShadeOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onClose={closeDrawer}
+        onOpenSimulator={openSimulator}
+        onOpenNotifications={openShade}
+        onOpenSettings={openSettings}
       />
 
       <NotificationShadeModal
         isOpen={shadeOpen}
         onClose={() => setShadeOpen(false)}
-        onOpenSimulator={() => setSimulatorOpen(true)}
+        onOpenSimulator={openSimulator}
       />
 
       <SettingsModal
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
-        onOpenSimulator={() => setSimulatorOpen(true)}
-        onOpenNotifications={() => setShadeOpen(true)}
-        onOpenPrivacy={() => setPrivacyOpen(true)}
-        onOpenCredits={() => setCreditsOpen(true)}
+        onOpenSimulator={openSimulator}
+        onOpenNotifications={openShade}
+        onOpenPrivacy={openPrivacy}
+        onOpenCredits={openCredits}
       />
 
       <PrivacyPolicyModal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <CreditsModal isOpen={creditsOpen} onClose={() => setCreditsOpen(false)} />
+      <ProfilePhotoEditor />
 
       <NewChatModal
         isOpen={newChatOpen}
@@ -91,8 +146,8 @@ const AppContent: React.FC = () => {
 
       {/* Main Container wrapped in PhoneFrameWrapper */}
       <PhoneFrameWrapper
-        onOpenSimulator={() => setSimulatorOpen(true)}
-        onOpenNotifications={() => setShadeOpen(true)}
+        onOpenSimulator={openSimulator}
+        onOpenNotifications={openShade}
       >
         {/* Desktop Split View or Mobile Single View */}
         {phoneFrameMode ? (
@@ -103,14 +158,14 @@ const AppContent: React.FC = () => {
               animate={{ x: activeConversationId ? -32 : 0, opacity: activeConversationId ? 0.55 : 1 }}
               transition={spring}
             >
-              <TopSearchBar
-                onOpenDrawer={() => setDrawerOpen(true)}
-                onOpenSettings={() => setSettingsOpen(true)}
-                onOpenPrivacy={() => setPrivacyOpen(true)}
-                onOpenCredits={() => setCreditsOpen(true)}
+              <TopSearchBarMemo
+                onOpenDrawer={openDrawer}
+                onOpenSettings={openSettings}
+                onOpenPrivacy={openPrivacy}
+                onOpenCredits={openCredits}
               />
-              <ConversationList onStartChat={() => setNewChatOpen(true)} />
-              <BottomTabs />
+              <ConversationListMemo onStartChat={openNewChat} />
+              <BottomTabsMemo />
             </motion.div>
             <AnimatePresence initial={false}>
               {activeConversationId && (
@@ -122,7 +177,7 @@ const AppContent: React.FC = () => {
                   exit={{ x: '100%' }}
                   transition={spring}
                 >
-                  <ChatView onBack={() => selectConversation(null)} />
+                  <ChatViewMemo onBack={leaveChat} />
                 </motion.div>
               )}
             </AnimatePresence>
@@ -138,7 +193,7 @@ const AppContent: React.FC = () => {
                   permanent
                   isOpen
                   onClose={() => {}}
-                  onOpenSettings={() => setSettingsOpen(true)}
+                  onOpenSettings={openSettings}
                 />
               )}
 
@@ -151,16 +206,16 @@ const AppContent: React.FC = () => {
                 }}
                 transition={spring}
               >
-                <TopSearchBar
-                  onOpenDrawer={() => setDrawerOpen(true)}
-                  onOpenSimulator={() => setSimulatorOpen(true)}
-                  onOpenNotifications={() => setShadeOpen(true)}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenPrivacy={() => setPrivacyOpen(true)}
-                  onOpenCredits={() => setCreditsOpen(true)}
+                <TopSearchBarMemo
+                  onOpenDrawer={openDrawer}
+                  onOpenSimulator={openSimulator}
+                  onOpenNotifications={openShade}
+                  onOpenSettings={openSettings}
+                  onOpenPrivacy={openPrivacy}
+                  onOpenCredits={openCredits}
                 />
-                <ConversationList onStartChat={() => setNewChatOpen(true)} />
-                <BottomTabs />
+                <ConversationListMemo onStartChat={openNewChat} />
+                <BottomTabsMemo />
               </motion.div>
 
               {/* Right Column: chat slides over the list on phones, sits beside it on larger screens */}
@@ -211,7 +266,7 @@ const AppContent: React.FC = () => {
                       exit={isDesktop ? { opacity: 0, x: 40 } : { x: '100%' }}
                       transition={spring}
                     >
-                      <ChatView onBack={() => selectConversation(null)} />
+                      <ChatViewMemo onBack={leaveChat} />
                     </motion.div>
                   )}
                 </AnimatePresence>

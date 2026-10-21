@@ -88,7 +88,7 @@ export const IncomingSimulatorModal: React.FC<IncomingSimulatorModalProps> = ({
       transition={fadeFast}
     >
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+        className="fixed inset-0 bg-black/40"
         onClick={onClose}
       />
       <motion.div

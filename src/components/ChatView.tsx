@@ -35,6 +35,7 @@ import {
 import { ScheduleModal } from './ScheduleModal.tsx';
 import { MessageActionSheet } from './MessageActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
+import { useBackHandler } from '../backStack.ts';
 
 interface ChatViewProps {
   onBack: () => void;
@@ -73,6 +74,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedMessageForAction, setSelectedMessageForAction] = useState<Message | null>(null);
   const { bind: bindBubblePress } = useLongPress<Message>(setSelectedMessageForAction);
+
+  // Android back button closes the open sheet / menu / dialog first
+  useBackHandler(!!selectedMessageForAction, () => setSelectedMessageForAction(null));
+  useBackHandler(menuOpen, () => setMenuOpen(false));
+  useBackHandler(infoModalOpen, () => setInfoModalOpen(false));
+  useBackHandler(scheduleModalOpen, () => setScheduleModalOpen(false));
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -648,7 +655,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
           exit={{ opacity: 0 }}
         >
           <div
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+            className="fixed inset-0 bg-black/40"
             onClick={() => setInfoModalOpen(false)}
           />
           <motion.div

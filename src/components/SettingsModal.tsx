@@ -31,7 +31,7 @@ import {
 import { useSMS } from '../context/SMSContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
-import { fileToAvatarDataUrl } from '../utils/profilePhoto.ts';
+import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -76,7 +76,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   } = useSMS();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [versionClicks, setVersionClicks] = useState(0);
@@ -129,18 +128,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     if (result.message) showToast(result.message);
   };
 
-  const handleProfilePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      updateSettings({ profilePhoto: await fileToAvatarDataUrl(file) });
-      showToast('Profile picture updated');
-    } catch {
-      showToast('Could not use that picture');
-    }
-  };
-
   const blockedList = conversations.filter((c) => c.isBlocked);
 
   return (
@@ -156,7 +143,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+        className="fixed inset-0 bg-black/40"
         onClick={onClose}
       />
 
@@ -213,7 +200,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => photoInputRef.current?.click()}
+                onClick={() => (settings.profilePhoto ? profilePhotoEditor.edit() : profilePhotoEditor.choose())}
                 className="relative shrink-0"
                 aria-label="Change profile picture"
               >
@@ -231,18 +218,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   className="w-full px-4 py-2.5 rounded-full bg-m3-surface-hi dark:bg-m3-d3 text-sm text-m3-on-surface dark:text-m3-on-surface-dk placeholder-m3-outline dark:placeholder-m3-outline-dk outline-none focus:ring-2 focus:ring-m3-primary/30"
                 />
                 <div className="flex flex-wrap gap-2">
+                  {settings.profilePhoto && (
+                    <button
+                      type="button"
+                      onClick={() => profilePhotoEditor.edit()}
+                      className="px-4 py-2 rounded-full text-xs font-semibold bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep"
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     type="button"
-                    onClick={() => photoInputRef.current?.click()}
+                    onClick={() => profilePhotoEditor.choose()}
                     className="px-4 py-2 rounded-full text-xs font-semibold bg-m3-primary-container text-m3-on-primary-deep dark:bg-m3-primary-deep dark:text-m3-primary-container"
                   >
-                    {settings.profilePhoto ? 'Change picture' : 'Add profile picture'}
+                    {settings.profilePhoto ? 'Change' : 'Add profile picture'}
                   </button>
                   {settings.profilePhoto && (
                     <button
                       type="button"
                       onClick={() => {
-                        updateSettings({ profilePhoto: null });
+                        updateSettings({ profilePhoto: null, profilePhotoSource: null });
                         showToast('Profile picture removed');
                       }}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold text-[#BA1A1A] dark:text-[#FFB4AB] bg-red-50 dark:bg-red-950/20"
@@ -257,13 +253,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="mt-3 text-[11px] text-m3-outline dark:text-m3-outline-dk">
               Your picture and name stay on this phone and are only shown inside Ping.
             </p>
-            <input
-              ref={photoInputRef}
-              type="file"
-              accept="image/*"
-              onChange={handleProfilePhoto}
-              className="hidden"
-            />
           </div>
 
           {/* Section 0: Default SMS App & Device System Integration */}

@@ -145,7 +145,7 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
           exit={{ opacity: 0 }}
           transition={fadeFast}
         >
-          <div className="fixed inset-0 bg-black/45 backdrop-blur-xs" onClick={onClose} />
+          <div className="fixed inset-0 bg-black/45" onClick={onClose} />
           <motion.div
             role="dialog"
             aria-label="Conversation options"

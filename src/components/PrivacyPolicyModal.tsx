@@ -180,7 +180,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
           exit={{ opacity: 0 }}
           transition={fadeFast}
         >
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose} />
+          <div className="fixed inset-0 bg-black/40" onClick={onClose} />
 
           <motion.div
             role="dialog"

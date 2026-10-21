@@ -1,9 +1,11 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, PanInfo } from 'motion/react';
 import { spring, springBouncy, springSoft } from '../motion.ts';
 import { LatestMessageCard } from './LatestMessageCard.tsx';
 import { ConversationActionSheet } from './ConversationActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
+import { useBackHandler } from '../backStack.ts';
+import type { PressHandlers } from '../utils/useLongPress.ts';
 import {
   Pin,
   PinOff,
@@ -30,6 +32,169 @@ interface ConversationListProps {
   onStartChat: () => void;
 }
 
+interface ConversationRowProps {
+  conv: Conversation;
+  index: number;
+  isSelected: boolean;
+  isSpam: boolean;
+  introDone: boolean;
+  onOpen: (id: string) => void;
+  onPin: (id: string) => void;
+  onArchive: (id: string) => void;
+  onToggleRead: (conv: Conversation) => void;
+  bindPress: (id: string) => PressHandlers;
+  consumeClick: () => boolean;
+}
+
+/** One conversation row. Memoised so that unrelated updates never re-render the whole inbox. */
+const ConversationRow = React.memo(function ConversationRow({
+  conv,
+  index,
+  isSelected,
+  isSpam,
+  introDone,
+  onOpen,
+  onPin,
+  onArchive,
+  onToggleRead,
+  bindPress,
+  consumeClick,
+}: ConversationRowProps) {
+  const hasUnread = conv.unreadCount > 0;
+  const initials = getInitials(conv.contactName, conv.phoneNumber);
+
+  return (
+      <motion.div
+        key={conv.id}
+        onClick={() => {
+          if (consumeClick()) return;
+          onOpen(conv.id);
+        }}
+        {...bindPress(conv.id)}
+        initial={!introDone && index < 14 ? { opacity: 0, y: 16 } : false}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ ...spring, delay: Math.min(index, 10) * 0.03 }}
+        whileTap={{ scale: 0.98 }}
+        className={`row-cv group relative flex items-center px-4 py-3.5 gap-3.5 cursor-pointer transition-colors duration-200 rounded-[28px] mx-2 ${
+          isSelected
+            ? 'bg-m3-primary-container/60 dark:bg-m3-primary-deep/40 text-m3-on-primary-deep dark:text-m3-primary-container'
+            : hasUnread
+            ? 'bg-white dark:bg-m3-d1 hover:bg-m3-surface-hi/80 dark:hover:bg-m3-d2 shadow-xs'
+            : 'hover:bg-m3-surface-hi/60 dark:hover:bg-m3-d2'
+        }`}
+      >
+        {/* Avatar */}
+        <div className="relative shrink-0">
+          <div
+            className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm ${conv.avatarColor} text-white shadow-xs`}
+          >
+            {initials}
+          </div>
+          {conv.isPinned && (
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white dark:bg-m3-d2 flex items-center justify-center shadow-xs border border-m3-line dark:border-m3-d4">
+              <Pin className="w-2.5 h-2.5 text-m3-primary dark:text-m3-primary-light fill-current" />
+            </div>
+          )}
+        </div>
+
+        {/* Message Content & Meta */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between mb-0.5">
+            <div className="flex items-center gap-1.5 min-w-0 pr-2">
+              <h3
+                className={`text-sm truncate ${
+                  hasUnread
+                    ? 'font-bold text-m3-on-surface dark:text-white'
+                    : 'font-medium text-m3-on-surface dark:text-m3-on-surface-dk'
+                }`}
+              >
+                {conv.contactName}
+              </h3>
+              {conv.category === 'transactions' && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-medium shrink-0">
+                  Bank / Alert
+                </span>
+              )}
+              {conv.category === 'promotions' && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 font-medium shrink-0">
+                  Promo
+                </span>
+              )}
+              {isSpam && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium shrink-0">
+                  Spam
+                </span>
+              )}
+            </div>
+            <span
+              className={`text-[11px] whitespace-nowrap shrink-0 tabular-nums ${
+                hasUnread
+                  ? 'font-bold text-m3-primary dark:text-m3-primary-light'
+                  : 'text-m3-outline dark:text-m3-outline-dk'
+              }`}
+            >
+              {formatConversationTime(conv.lastMessageTimestamp)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <p
+              className={`text-xs truncate ${
+                hasUnread
+                  ? 'font-semibold text-m3-on-surface dark:text-m3-on-surface-dk'
+                  : 'text-m3-variant dark:text-[#9EA2A8]'
+              }`}
+            >
+              {conv.lastMessageText || 'No messages yet'}
+            </p>
+            {hasUnread && (
+              <span className="w-2.5 h-2.5 rounded-full bg-m3-primary dark:bg-m3-primary-light shrink-0" />
+            )}
+          </div>
+        </div>
+
+        {/* Hover Quick Actions */}
+        <div className="hidden group-hover:flex items-center gap-1 shrink-0 pl-1">
+          <button
+            type="button"
+            title={conv.isPinned ? 'Unpin' : 'Pin'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onPin(conv.id);
+            }}
+            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
+          >
+            {conv.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            title={conv.isArchived ? 'Unarchive' : 'Archive'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onArchive(conv.id);
+            }}
+            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
+          >
+            {conv.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            title={hasUnread ? 'Mark as read' : 'Mark as unread'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleRead(conv);
+            }}
+            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
+          >
+            {hasUnread ? <CheckCheck className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
+          </button>
+        </div>
+      </motion.div>
+  );
+});
+
 const PAGER_FILTERS: FilterCategory[] = ['all', 'personal', 'transactions', 'promotions'];
 
 export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat }) => {
@@ -53,7 +218,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   // The floating button tucks away while you scroll down and returns when you scroll up
   const [fabHidden, setFabHidden] = useState(false);
   const lastScrollTop = useRef(0);
+  // Only the first rows are drawn; more are added as you scroll near the bottom (keeps taps instant)
+  const [visibleCount, setVisibleCount] = useState(40);
+  const paneLength = useRef(0);
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 900) {
+      setVisibleCount((c) => (c >= paneLength.current ? c : c + 40));
+    }
     const top = e.currentTarget.scrollTop;
     const delta = top - lastScrollTop.current;
     if (Math.abs(delta) > 10) {
@@ -76,6 +248,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   // Long-press a conversation for its options (pin, archive, copy OTP, spam, block, delete ...)
   const [actionConvId, setActionConvId] = useState<string | null>(null);
   const { bind: bindPress, consumeClick: consumePressClick } = useLongPress<string>(setActionConvId);
+  useBackHandler(actionConvId !== null, () => setActionConvId(null));
 
   // Entrance animation only on the very first paint, so swiping between tabs never flashes
   const [introDone, setIntroDone] = useState(false);
@@ -83,6 +256,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     const t = setTimeout(() => setIntroDone(true), 1000);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    setVisibleCount(40);
+  }, [searchQuery]);
 
   // ---- Swipe pager (All / Personal / Transactions / Promotions) ----
   const pagerIndex = PAGER_FILTERS.indexOf(filter);
@@ -107,6 +284,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   // panes have just swapped places, so the track is simply put back to the middle.
   useLayoutEffect(() => {
     if (currentPaneRef.current) currentPaneRef.current.scrollTop = 0;
+    setVisibleCount(40);
     const previous = prevPagerIndex.current;
     prevPagerIndex.current = pagerIndex;
     if (swipeCommitted.current) {
@@ -200,146 +378,45 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   const otherConversations = filteredConversations.filter((c) => !c.isPinned);
 
   // Render individual conversation row
-  const renderRow = (conv: Conversation, index = 0) => {
-    const isSelected = activeConversationId === conv.id;
-    const hasUnread = conv.unreadCount > 0;
-    const initials = getInitials(conv.contactName, conv.phoneNumber);
-
-    return (
-      <motion.div
-        key={conv.id}
-        onClick={() => {
-          if (consumePressClick()) return;
-          selectConversation(conv.id);
-        }}
-        {...bindPress(conv.id)}
-        initial={!introDone && index < 14 ? { opacity: 0, y: 16 } : false}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring, delay: Math.min(index, 10) * 0.03 }}
-        whileTap={{ scale: 0.98 }}
-        className={`row-cv group relative flex items-center px-4 py-3.5 gap-3.5 cursor-pointer transition-colors duration-200 rounded-[28px] mx-2 ${
-          isSelected
-            ? 'bg-m3-primary-container/60 dark:bg-m3-primary-deep/40 text-m3-on-primary-deep dark:text-m3-primary-container'
-            : hasUnread
-            ? 'bg-white dark:bg-m3-d1 hover:bg-m3-surface-hi/80 dark:hover:bg-m3-d2 shadow-xs'
-            : 'hover:bg-m3-surface-hi/60 dark:hover:bg-m3-d2'
-        }`}
-      >
-        {/* Avatar */}
-        <div className="relative shrink-0">
-          <div
-            className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm ${conv.avatarColor} text-white shadow-xs`}
-          >
-            {initials}
-          </div>
-          {conv.isPinned && (
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white dark:bg-m3-d2 flex items-center justify-center shadow-xs border border-m3-line dark:border-m3-d4">
-              <Pin className="w-2.5 h-2.5 text-m3-primary dark:text-m3-primary-light fill-current" />
-            </div>
-          )}
-        </div>
-
-        {/* Message Content & Meta */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-0.5">
-            <div className="flex items-center gap-1.5 min-w-0 pr-2">
-              <h3
-                className={`text-sm truncate ${
-                  hasUnread
-                    ? 'font-bold text-m3-on-surface dark:text-white'
-                    : 'font-medium text-m3-on-surface dark:text-m3-on-surface-dk'
-                }`}
-              >
-                {conv.contactName}
-              </h3>
-              {conv.category === 'transactions' && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-medium shrink-0">
-                  Bank / Alert
-                </span>
-              )}
-              {conv.category === 'promotions' && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-pink-50 dark:bg-pink-950/40 text-pink-700 dark:text-pink-300 font-medium shrink-0">
-                  Promo
-                </span>
-              )}
-              {spamConversationIds.has(conv.id) && (
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium shrink-0">
-                  Spam
-                </span>
-              )}
-            </div>
-            <span
-              className={`text-[11px] whitespace-nowrap shrink-0 tabular-nums ${
-                hasUnread
-                  ? 'font-bold text-m3-primary dark:text-m3-primary-light'
-                  : 'text-m3-outline dark:text-m3-outline-dk'
-              }`}
-            >
-              {formatConversationTime(conv.lastMessageTimestamp)}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between gap-2">
-            <p
-              className={`text-xs truncate ${
-                hasUnread
-                  ? 'font-semibold text-m3-on-surface dark:text-m3-on-surface-dk'
-                  : 'text-m3-variant dark:text-[#9EA2A8]'
-              }`}
-            >
-              {conv.lastMessageText || 'No messages yet'}
-            </p>
-            {hasUnread && (
-              <span className="w-2.5 h-2.5 rounded-full bg-m3-primary dark:bg-m3-primary-light shrink-0" />
-            )}
-          </div>
-        </div>
-
-        {/* Hover Quick Actions */}
-        <div className="hidden group-hover:flex items-center gap-1 shrink-0 pl-1">
-          <button
-            type="button"
-            title={conv.isPinned ? 'Unpin' : 'Pin'}
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePinConversation(conv.id);
-            }}
-            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
-          >
-            {conv.isPinned ? <PinOff className="w-4 h-4" /> : <Pin className="w-4 h-4" />}
-          </button>
-
-          <button
-            type="button"
-            title={conv.isArchived ? 'Unarchive' : 'Archive'}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleArchiveConversation(conv.id);
-            }}
-            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
-          >
-            {conv.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
-          </button>
-
-          <button
-            type="button"
-            title={hasUnread ? 'Mark as read' : 'Mark as unread'}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (hasUnread) {
-                markAsRead(conv.id);
-              } else {
-                markAsUnread(conv.id);
-              }
-            }}
-            className="p-1.5 text-m3-variant dark:text-m3-variant-dk hover:text-m3-primary hover:bg-m3-primary-container/50 dark:hover:bg-m3-primary-deep/40 rounded-full transition-colors"
-          >
-            {hasUnread ? <CheckCheck className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
-          </button>
-        </div>
-      </motion.div>
-    );
+  // Rows are memoised components; these callbacks stay the same between renders
+  const rowActions = useRef({
+    selectConversation,
+    togglePinConversation,
+    toggleArchiveConversation,
+    markAsRead,
+    markAsUnread,
+  });
+  rowActions.current = {
+    selectConversation,
+    togglePinConversation,
+    toggleArchiveConversation,
+    markAsRead,
+    markAsUnread,
   };
+  const onOpenRow = useCallback((id: string) => rowActions.current.selectConversation(id), []);
+  const onPinRow = useCallback((id: string) => rowActions.current.togglePinConversation(id), []);
+  const onArchiveRow = useCallback((id: string) => rowActions.current.toggleArchiveConversation(id), []);
+  const onToggleReadRow = useCallback((c: Conversation) => {
+    if (c.unreadCount > 0) rowActions.current.markAsRead(c.id);
+    else rowActions.current.markAsUnread(c.id);
+  }, []);
+
+  const renderRow = (conv: Conversation, index = 0) => (
+    <ConversationRow
+      key={conv.id}
+      conv={conv}
+      index={index}
+      isSelected={activeConversationId === conv.id}
+      isSpam={spamConversationIds.has(conv.id)}
+      introDone={introDone}
+      onOpen={onOpenRow}
+      onPin={onPinRow}
+      onArchive={onArchiveRow}
+      onToggleRead={onToggleReadRow}
+      bindPress={bindPress}
+      consumeClick={consumePressClick}
+    />
+  );
 
   // One page of the list for a given tab (used by the swipe pager and by the single view)
   const renderContent = (f: FilterCategory, limit = Infinity) => {
@@ -360,6 +437,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     const featuredId = featured ? featured.id : null;
     const pinned = list.filter((c) => c.isPinned && c.id !== featuredId);
     const others = list.filter((c) => !c.isPinned && c.id !== featuredId);
+    if (f === filter) paneLength.current = list.length;
     return (
       <>
         {/* If in STARRED filter view, show starred message cards */}
@@ -534,9 +612,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                   ref={slot === 'cur' ? currentPaneRef : undefined}
                   onScroll={slot === 'cur' ? handleScroll : undefined}
                   aria-hidden={slot !== 'cur'}
-                  className="w-1/3 h-full shrink-0 overflow-y-auto pb-28 pt-1"
+                  className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y pb-28 pt-1"
                 >
-                  {f ? renderContent(f, slot === 'cur' ? Infinity : 20) : null}
+                  {f ? renderContent(f, slot === 'cur' ? visibleCount : 20) : null}
                 </div>
               );
             })}
@@ -544,7 +622,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto pb-28 pt-1" onScroll={handleScroll}>
-          {renderContent(filter)}
+          {renderContent(filter, visibleCount)}
         </div>
       )}
 

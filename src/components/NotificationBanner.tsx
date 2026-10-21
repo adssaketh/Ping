@@ -81,7 +81,7 @@ export const NotificationBanner: React.FC = () => {
       >
         <div
           onClick={handleOpenChat}
-          className="w-full bg-white/95 dark:bg-m3-d2/95 backdrop-blur-md rounded-3xl p-3.5 shadow-xl border border-m3-line dark:border-m3-d4 cursor-pointer hover:shadow-2xl transition-all"
+          className="w-full bg-white/95 dark:bg-m3-d2/95 rounded-3xl p-3.5 shadow-xl border border-m3-line dark:border-m3-d4 cursor-pointer hover:shadow-2xl transition-all"
         >
           {/* Notification Header */}
           <div className="flex items-center justify-between text-xs text-m3-outline dark:text-m3-outline-dk mb-1.5">

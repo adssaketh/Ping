@@ -79,7 +79,7 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact }) =
         </button>
 
         {showIOSGuide && (
-          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/50">
             <div className="w-full max-w-sm rounded-3xl bg-white dark:bg-m3-d2 p-6 shadow-2xl border border-m3-line dark:border-m3-d4 text-left">
               <h3 className="text-base font-semibold text-m3-on-surface dark:text-white mb-2">
                 Install Ping on iOS

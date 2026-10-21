@@ -1,6 +1,15 @@
 import { useCallback, useRef } from 'react';
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 
+export interface PressHandlers {
+  onPointerDown: (e: ReactPointerEvent) => void;
+  onPointerMove: (e: ReactPointerEvent) => void;
+  onPointerUp: () => void;
+  onPointerLeave: () => void;
+  onPointerCancel: () => void;
+  onContextMenu: (e: ReactMouseEvent) => void;
+}
+
 /**
  * Long-press detection for list rows and message bubbles. `bind(item)` returns the event handlers
  * to spread on an element; moving the finger more than 10px (scrolling or swiping) cancels it.
@@ -19,7 +28,7 @@ export function useLongPress<T>(onLongPress: (item: T) => void, delayMs = 450) {
   }, []);
 
   const bind = useCallback(
-    (item: T) => ({
+    (item: T): PressHandlers => ({
       onPointerDown: (e: ReactPointerEvent) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         fired.current = false;

@@ -60,7 +60,7 @@ export const CreditsModal: React.FC<CreditsModalProps> = ({ isOpen, onClose }) =
           exit={{ opacity: 0 }}
           transition={fadeFast}
         >
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-xs" onClick={onClose} />
+          <div className="fixed inset-0 bg-black/40" onClick={onClose} />
 
           <motion.div
             role="dialog"

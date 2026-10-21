@@ -52,6 +52,8 @@ interface PingSmsPluginInterface {
   markThreadRead(options: { address: string }): Promise<{ updated: number }>;
   setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
   getSystemColors(): Promise<SystemPalettes>;
+  setBackEnabled(options: { enabled: boolean }): Promise<void>;
+  exitApp(): Promise<void>;
   saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   restoreSms(options: { messages: BackupSms[] }): Promise<{ inserted: number; skipped: number }>;
@@ -70,6 +72,14 @@ interface PingSmsPluginInterface {
   addListener(
     eventName: 'smsStatus',
     listenerFunc: (data: { messageId: string; status: 'sent' | 'delivered' | 'failed'; resultCode: number }) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'backPressed',
+    listenerFunc: () => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'appResumed',
+    listenerFunc: (data: { isDefault: boolean }) => void
   ): Promise<{ remove: () => void }>;
 }
 
@@ -201,6 +211,53 @@ export const smsBridge = {
   /** Writes backed-up messages into the phone's SMS store (Ping must be the default SMS app). */
   async restoreDeviceSms(messages: BackupSms[]): Promise<{ inserted: number; skipped: number }> {
     return PingSms.restoreSms({ messages });
+  },
+
+  /** Tells Android whether the back button has something to close inside the app. */
+  async setBackEnabled(enabled: boolean): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.setBackEnabled({ enabled });
+    } catch (err) {
+      console.warn('setBackEnabled failed:', err);
+    }
+  },
+
+  /** Sends the app to the background. */
+  async minimizeApp(): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.exitApp();
+    } catch (err) {
+      console.warn('exitApp failed:', err);
+    }
+  },
+
+  async listenToBack(callback: () => void): Promise<() => void> {
+    if (!isNativeAndroid()) return () => {};
+    try {
+      const handle = await PingSms.addListener('backPressed', callback);
+      return () => {
+        handle.remove();
+      };
+    } catch (err) {
+      console.warn('listenToBack failed:', err);
+      return () => {};
+    }
+  },
+
+  /** Fires whenever the user comes back to Ping (for example after setting the default SMS app). */
+  async listenToAppResume(callback: (data: { isDefault: boolean }) => void): Promise<() => void> {
+    if (!isNativeAndroid()) return () => {};
+    try {
+      const handle = await PingSms.addListener('appResumed', callback);
+      return () => {
+        handle.remove();
+      };
+    } catch (err) {
+      console.warn('listenToAppResume failed:', err);
+      return () => {};
+    }
   },
 
   /** Tells the Android side how to treat spam, so spam notifications can be kept quiet. */

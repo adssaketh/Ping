@@ -5,13 +5,14 @@ import { Conversation, Message } from '../types.ts';
 import { extractOtpCode, formatFullDateTime, getInitials } from '../utils/smsUtils.ts';
 import { springBouncy } from '../motion.ts';
 import { copyText } from '../utils/clipboard.ts';
+import type { PressHandlers } from '../utils/useLongPress.ts';
 
 interface LatestMessageCardProps {
   conversation: Conversation;
   message: Message;
   onOpen: () => void;
   /** Long-press handlers from the list, spread onto the card */
-  pressProps?: Record<string, unknown>;
+  pressProps?: PressHandlers;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {

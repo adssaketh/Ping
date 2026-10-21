@@ -85,6 +85,44 @@ public class PingSmsPlugin extends Plugin {
         }
     }
 
+    /** Tells the web app the user came back to Ping, so it can re-check the default SMS app and permissions. */
+    @Override
+    protected void handleOnResume() {
+        super.handleOnResume();
+        JSObject ret = new JSObject();
+        Context context = getContext();
+        ret.put("isDefault", context.getPackageName().equals(Telephony.Sms.getDefaultSmsPackage(context)));
+        notifyListeners("appResumed", ret);
+    }
+
+    /** Back button pressed while the web app has something to close. Returns false if it cannot be delivered. */
+    public static boolean notifyBackPressed() {
+        if (instance == null) return false;
+        instance.notifyListeners("backPressed", new JSObject());
+        return true;
+    }
+
+    /** The web app says whether the back button currently has something to close. */
+    @PluginMethod
+    public void setBackEnabled(PluginCall call) {
+        final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        final Activity activity = getActivity();
+        if (activity instanceof MainActivity) {
+            activity.runOnUiThread(() -> ((MainActivity) activity).setBackEnabled(enabled));
+        }
+        call.resolve();
+    }
+
+    /** Sends Ping to the background (like pressing back on the home screen). */
+    @PluginMethod
+    public void exitApp(PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> activity.moveTaskToBack(true));
+        }
+        call.resolve();
+    }
+
     /** Reports sent / delivered / failed for a message sent with a client-side messageId. */
     public static void notifySmsStatus(String messageId, String status, int resultCode) {
         if (instance != null && messageId != null) {
@@ -350,6 +388,7 @@ public class PingSmsPlugin extends Plugin {
                 if (roleManager.isRoleHeld(RoleManager.ROLE_SMS)) {
                     JSObject ret = new JSObject();
                     ret.put("granted", true);
+                    ret.put("isDefault", true);
                     call.resolve(ret);
                     return;
                 }

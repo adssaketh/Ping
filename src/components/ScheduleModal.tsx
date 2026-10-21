@@ -98,7 +98,7 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+        className="fixed inset-0 bg-black/40"
         onClick={onClose}
       />
 

@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   characterCounterEnabled: true,
   groupSmsIndividual: true,
   profilePhoto: null,
+  profilePhotoSource: null,
   profileName: '',
   spamProtectionEnabled: true,
   spamSensitivity: 'balanced',
@@ -148,6 +149,42 @@ const STORAGE_KEYS = {
   CONTACTS: 'gm_sms_contacts_v2',
   SETTINGS: 'gm_sms_settings_v2',
 };
+
+/** Writes `value` to localStorage 400ms after it last changed, and immediately when the app is hidden. */
+function useDebouncedPersist(key: string, value: unknown, delayMs = 400) {
+  const latest = useRef(value);
+  latest.current = value;
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        localStorage.setItem(key, JSON.stringify(latest.current));
+      } catch {
+        /* storage full or unavailable */
+      }
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [key, value, delayMs]);
+
+  useEffect(() => {
+    const flush = () => {
+      try {
+        localStorage.setItem(key, JSON.stringify(latest.current));
+      } catch {
+        /* storage full or unavailable */
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [key]);
+}
 
 const DEVICE_ID_PREFIX = 'm-dev-';
 
@@ -307,24 +344,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Save data to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CONVERSATIONS, JSON.stringify(conversations));
-    } catch {}
-  }, [conversations]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
-    } catch {}
-  }, [messages]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.CONTACTS, JSON.stringify(contacts));
-    } catch {}
-  }, [contacts]);
+  // Save data to localStorage (a moment after the last change, so taps are never blocked by big writes)
+  useDebouncedPersist(STORAGE_KEYS.CONVERSATIONS, conversations);
+  useDebouncedPersist(STORAGE_KEYS.MESSAGES, messages);
+  useDebouncedPersist(STORAGE_KEYS.CONTACTS, contacts);
 
   // Auto-dismiss banner after 8s
   useEffect(() => {
@@ -1240,8 +1263,9 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const requestDefaultSmsApp = useCallback(async (): Promise<boolean> => {
     try {
       const res = await smsBridge.requestDefaultSmsApp();
-      setIsDefaultSms(res.isDefault);
-      return res.isDefault;
+      // Ask Android again for the real answer (the dialog result alone can lag behind)
+      await checkDefaultRef.current();
+      return !!res.isDefault || !!res.granted;
     } catch (err) {
       console.warn('Failed requesting default SMS', err);
       return false;
@@ -1513,7 +1537,25 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+
+    // Android tells us directly when the user comes back (e.g. after choosing the default SMS app)
+    let cancelled = false;
+    let unsubscribeResume: (() => void) | undefined;
+    smsBridge
+      .listenToAppResume(() => {
+        checkDefaultRef.current();
+        autoSync();
+      })
+      .then((unsub) => {
+        if (cancelled) unsub();
+        else unsubscribeResume = unsub;
+      });
+
+    return () => {
+      cancelled = true;
+      if (unsubscribeResume) unsubscribeResume();
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [isNativePlatform]);
 
   // Track real carrier results (sent / delivered / failed) for outgoing SMS

@@ -83,6 +83,8 @@ export interface SmsAppSettings {
   groupSmsIndividual: boolean;
   /** Profile picture, stored on this phone only (a small square JPEG as a data URL) */
   profilePhoto: string | null;
+  /** The larger original used for re-editing the picture (also stored on this phone only) */
+  profilePhotoSource: string | null;
   profileName: string;
   spamProtectionEnabled: boolean;
   /** How aggressively unknown senders are filtered into the Spam folder */

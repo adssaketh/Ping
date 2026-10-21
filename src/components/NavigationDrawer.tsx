@@ -259,7 +259,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+        className="fixed inset-0 bg-black/40"
         onClick={onClose}
       />
 

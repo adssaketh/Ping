@@ -6,7 +6,8 @@ import { FilterCategory } from '../types.ts';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { spring, springBouncy } from '../motion.ts';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
-import { fileToAvatarDataUrl } from '../utils/profilePhoto.ts';
+import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
+import { useBackHandler } from '../backStack.ts';
 
 interface TopSearchBarProps {
   onOpenDrawer: () => void;
@@ -34,18 +35,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   } = useSMS();
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const photoInputRef = useRef<HTMLInputElement>(null);
-
-  const handlePhotoPicked = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      updateSettings({ profilePhoto: await fileToAvatarDataUrl(file) });
-    } catch (err) {
-      console.warn('Profile picture failed:', err);
-    }
-  };
+  useBackHandler(menuOpen, () => setMenuOpen(false));
 
   return (
     <div className="px-4 pt-3 pb-2 shrink-0">
@@ -119,7 +109,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                   <div className="flex items-center gap-3 px-3 pt-2 pb-3">
                     <button
                       type="button"
-                      onClick={() => photoInputRef.current?.click()}
+                      onClick={() => (settings.profilePhoto ? profilePhotoEditor.edit() : profilePhotoEditor.choose())}
                       className="relative shrink-0"
                       aria-label="Change profile picture"
                     >
@@ -132,13 +122,24 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                       <p className="text-sm font-semibold truncate text-m3-on-surface dark:text-white">
                         {settings.profileName || 'Your profile'}
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => photoInputRef.current?.click()}
-                        className="text-xs font-medium text-m3-primary dark:text-m3-primary-light"
-                      >
-                        {settings.profilePhoto ? 'Change picture' : 'Add profile picture'}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => (settings.profilePhoto ? profilePhotoEditor.edit() : profilePhotoEditor.choose())}
+                          className="text-xs font-medium text-m3-primary dark:text-m3-primary-light"
+                        >
+                          {settings.profilePhoto ? 'Edit' : 'Add profile picture'}
+                        </button>
+                        {settings.profilePhoto && (
+                          <button
+                            type="button"
+                            onClick={() => profilePhotoEditor.choose()}
+                            className="text-xs font-medium text-m3-primary dark:text-m3-primary-light"
+                          >
+                            Change
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="h-px mx-2 mb-1 bg-m3-line dark:bg-m3-d4" />
@@ -193,13 +194,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
         </div>
       </motion.div>
 
-      <input
-        ref={photoInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handlePhotoPicked}
-        className="hidden"
-      />
     </div>
   );
 };
