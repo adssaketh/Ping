@@ -284,6 +284,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       ? 'Ping handles all incoming carrier SMS and native messaging.'
                       : 'Set Ping as default to send real SMS and read SIM messages directly.'}
                   </p>
+                  {!isDefaultSms && currentDefaultPackage && (
+                    <p className="text-[11px] text-m3-outline dark:text-m3-outline-dk mt-1 font-mono break-all">
+                      Android lists {currentDefaultPackage} as the default.
+                    </p>
+                  )}
                 </div>
               </div>
 

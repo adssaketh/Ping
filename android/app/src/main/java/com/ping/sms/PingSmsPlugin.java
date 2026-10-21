@@ -90,8 +90,7 @@ public class PingSmsPlugin extends Plugin {
     protected void handleOnResume() {
         super.handleOnResume();
         JSObject ret = new JSObject();
-        Context context = getContext();
-        ret.put("isDefault", context.getPackageName().equals(Telephony.Sms.getDefaultSmsPackage(context)));
+        ret.put("isDefault", isPingDefaultSms());
         notifyListeners("appResumed", ret);
     }
 
@@ -283,7 +282,7 @@ public class PingSmsPlugin extends Plugin {
     @PluginMethod
     public void restoreSms(PluginCall call) {
         Context context = getContext();
-        if (!context.getPackageName().equals(Telephony.Sms.getDefaultSmsPackage(context))) {
+        if (!isPingDefaultSms()) {
             call.reject("NOT_DEFAULT_SMS_APP", "Ping must be the default SMS app to restore messages into the phone");
             return;
         }
@@ -366,11 +365,27 @@ public class PingSmsPlugin extends Plugin {
         return out;
     }
 
+    /**
+     * True when Ping is the default SMS app. On Android 10+ the official check is the SMS role; the older
+     * default-package lookup is kept as a second opinion (some phones answer it differently).
+     */
+    private boolean isPingDefaultSms() {
+        Context context = getContext();
+        if (context.getPackageName().equals(Telephony.Sms.getDefaultSmsPackage(context))) return true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            RoleManager roleManager = context.getSystemService(RoleManager.class);
+            return roleManager != null
+                && roleManager.isRoleAvailable(RoleManager.ROLE_SMS)
+                && roleManager.isRoleHeld(RoleManager.ROLE_SMS);
+        }
+        return false;
+    }
+
     @PluginMethod
     public void isDefaultSmsApp(PluginCall call) {
         Context context = getContext();
         String currentDefault = Telephony.Sms.getDefaultSmsPackage(context);
-        boolean isDefault = context.getPackageName().equals(currentDefault);
+        boolean isDefault = isPingDefaultSms();
 
         JSObject ret = new JSObject();
         ret.put("isDefault", isDefault);
@@ -406,9 +421,7 @@ public class PingSmsPlugin extends Plugin {
 
     @ActivityCallback
     private void defaultSmsResult(PluginCall call, ActivityResult result) {
-        Context context = getContext();
-        String currentDefault = Telephony.Sms.getDefaultSmsPackage(context);
-        boolean isDefault = context.getPackageName().equals(currentDefault);
+        boolean isDefault = isPingDefaultSms();
 
         JSObject ret = new JSObject();
         ret.put("granted", isDefault);
