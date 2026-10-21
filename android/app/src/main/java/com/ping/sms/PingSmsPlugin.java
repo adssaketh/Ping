@@ -1,6 +1,7 @@
 package com.ping.sms;
 
 import android.Manifest;
+import android.app.Activity;
 import android.app.role.RoleManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
@@ -12,10 +13,14 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.ContactsContract;
 import android.provider.Telephony;
+import android.view.View;
+import android.view.Window;
 import android.telephony.PhoneNumberUtils;
 import androidx.activity.result.ActivityResult;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -80,6 +85,26 @@ public class PingSmsPlugin extends Plugin {
             ret.put("resultCode", resultCode);
             instance.notifyListeners("smsStatus", ret);
         }
+    }
+
+    /** Matches the status/navigation bar area and icon colours to the app's light or dark theme. */
+    @PluginMethod
+    public void setSystemBarsTheme(PluginCall call) {
+        final boolean dark = Boolean.TRUE.equals(call.getBoolean("dark", false));
+        final Activity activity = getActivity();
+        if (activity == null) {
+            call.resolve();
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            Window window = activity.getWindow();
+            View decor = window.getDecorView();
+            decor.setBackgroundColor(dark ? 0xFF111318 : 0xFFF8FAFD);
+            WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, decor);
+            controller.setAppearanceLightStatusBars(!dark);
+            controller.setAppearanceLightNavigationBars(!dark);
+            call.resolve();
+        });
     }
 
     @PluginMethod

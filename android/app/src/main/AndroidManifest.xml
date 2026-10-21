@@ -63,6 +63,11 @@
             android:name=".SmsStatusReceiver"
             android:exported="false" />
 
+        <!-- "Copy OTP" notification button -->
+        <receiver
+            android:name=".CopyOtpReceiver"
+            android:exported="false" />
+
         <!-- Service for Respond via Message quick replies (Default SMS app requirement) -->
         <service
             android:name=".HeadlessSmsSendService"

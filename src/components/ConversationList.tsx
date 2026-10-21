@@ -15,9 +15,6 @@ import {
   Tag,
   CreditCard,
   User,
-  Smartphone,
-  RefreshCw,
-  CheckCircle2,
 } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { Conversation, Message } from '../types.ts';
@@ -40,12 +37,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     markAsUnread,
     starredMessages,
     messages,
-    isNativePlatform,
-    isDefaultSms,
-    requestDefaultSmsApp,
-    syncDeviceSmsAndContacts,
-    isSyncingDevice,
-    syncResult,
   } = useSMS();
 
   // Filter conversations
@@ -230,55 +221,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     <div className="relative flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-[#F8FAFD] dark:bg-[#111318]">
       {/* Scrollable list */}
       <div className="flex-1 overflow-y-auto pb-24 pt-1">
-        {/* Default SMS Banner when running on native Android and not yet default */}
-        {isNativePlatform && !isDefaultSms && filter === 'all' && (
-          <div className="mx-3.5 mt-2 mb-3 p-4 rounded-3xl bg-[#D3E3FD]/60 dark:bg-[#004A77]/35 border border-[#A8C7FA]/50 dark:border-[#0B57D0]/50 shadow-xs">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-[#0B57D0] text-white flex items-center justify-center shrink-0 shadow-xs">
-                <Smartphone className="w-5 h-5" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-semibold text-[#1F1F1F] dark:text-white">
-                  Make Ping your default SMS app
-                </h4>
-                <p className="text-xs text-[#444746] dark:text-[#C4C7C5] mt-0.5 leading-relaxed">
-                  Set Ping as your default SMS handler to send carrier texts, read incoming messages, and sync phone contacts.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={requestDefaultSmsApp}
-                    className="px-4 py-1.5 bg-[#0B57D0] hover:bg-[#0842A0] text-white rounded-full text-xs font-semibold shadow-xs transition-colors"
-                  >
-                    Set as default
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => syncDeviceSmsAndContacts()}
-                    disabled={isSyncingDevice}
-                    className="px-3.5 py-1.5 bg-white dark:bg-[#1A1D23] text-[#0B57D0] dark:text-[#A8C7FA] border border-[#C4C7C5] dark:border-[#444746] hover:bg-black/5 dark:hover:bg-white/10 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingDevice ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingDevice ? 'Syncing...' : 'Sync Device SMS'}</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Sync Success feedback notice */}
-        {syncResult && filter === 'all' && (
-          <div className="mx-3.5 mb-2 px-3.5 py-2 rounded-2xl bg-[#E8F5E9] dark:bg-[#1B3520] border border-[#A5D6A7] dark:border-[#2E7D32] flex items-center justify-between text-xs text-[#1E4620] dark:text-[#A5D6A7]">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-[#2E7D32] dark:text-[#81C784]" />
-              <span>
-                Synced {syncResult.smsCount} messages & {syncResult.contactCount} contacts from device
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* If in STARRED filter view, show starred message cards */}
         {filter === 'starred' ? (
           <div className="px-3 py-2 space-y-2">

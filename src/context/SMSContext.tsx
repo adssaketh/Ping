@@ -171,6 +171,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isDarkMode]);
 
+  // Keep Android's status / navigation bar area and icon colours in step with the app theme
+  useEffect(() => {
+    smsBridge.setSystemBarsTheme(isDarkMode);
+  }, [isDarkMode]);
+
   // Sync sound setting
   useEffect(() => {
     soundFx.enabled = settings.soundEnabled;
@@ -1169,6 +1174,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const syncRef = useRef(syncDeviceSmsAndContacts);
   syncRef.current = syncDeviceSmsAndContacts;
   const isSyncingRef = useRef(false);
+  const checkDefaultRef = useRef(checkDefaultSmsApp);
+  checkDefaultRef.current = checkDefaultSmsApp;
 
   // Listen to native incoming SMS & check default status on startup (subscribe once)
   useEffect(() => {
@@ -1207,7 +1214,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     autoSync();
     const onVisible = () => {
-      if (document.visibilityState === 'visible') autoSync();
+      if (document.visibilityState === 'visible') {
+        // The user may have changed the default SMS app / permissions in Android settings meanwhile
+        checkDefaultRef.current();
+        autoSync();
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);

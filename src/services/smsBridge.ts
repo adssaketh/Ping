@@ -41,6 +41,7 @@ interface PingSmsPluginInterface {
   readSms(options?: { limit?: number }): Promise<{ messages: NativeSmsMessage[]; count: number }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   markThreadRead(options: { address: string }): Promise<{ updated: number }>;
+  setSystemBarsTheme(options: { dark: boolean }): Promise<void>;
   sendSms(options: {
     to: string;
     message: string;
@@ -161,6 +162,15 @@ export const smsBridge = {
     } catch (err) {
       console.warn('requestNotificationPermission failed:', err);
       return false;
+    }
+  },
+
+  async setSystemBarsTheme(dark: boolean): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.setSystemBarsTheme({ dark });
+    } catch (err) {
+      console.warn('setSystemBarsTheme failed:', err);
     }
   },
 

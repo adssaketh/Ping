@@ -241,19 +241,46 @@ export const soundFx = new SoundEffects();
 /**
  * Intelligent OTP / Verification code extractor for standard SMS
  */
+const OTP_KEYWORD =
+  /otp|one[- ]?time|pass\s?code|password|verification|verify|security code|auth|log\s?in|\bcode\b|\bpin\b|\bg-\d/i;
+// Numbers that follow these are IDs, masked account numbers, references, etc. - not codes
+const NOT_A_CODE_BEFORE =
+  /\b(?:otp[-\s]?id|id|uan|ref(?:erence)?|txn|transaction|a\/c|acct|account|card|ending|no)[\s:#.\-]*$|x{2,}[\s:#.\-]*$|\*{2,}[\s:#.\-]*$/i;
+const CURRENCY_BEFORE = /(?:\brs\.?|\binr|\busd|₹|\$|\bamount|\bamt|\bbalance|\bbal)\s*[:.]?\s*$/i;
+
+/**
+ * Finds the one-time code in an SMS. Returns null unless the text looks like an OTP message,
+ * and skips look-alike numbers such as masked account numbers, OTP-IDs and amounts.
+ * (Keep in sync with OtpExtractor.java used by the Android notification.)
+ */
 export function extractOtpCode(text: string): string | null {
-  if (!text) return null;
-  // Specific patterns like "code is 123456", "OTP: 987654", "G-123456"
-  const prefixMatch = text.match(/(?:code|otp|passcode|secret|pin|verification|auth|g-)\s*(?:is|:)?\s*([0-9]{4,8})\b/i);
-  if (prefixMatch && prefixMatch[1]) {
-    return prefixMatch[1];
+  if (!text || !OTP_KEYWORD.test(text)) return null;
+
+  let best: string | null = null;
+  let bestScore = -1;
+  const numbers = /\b\d{4,8}\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = numbers.exec(text)) !== null) {
+    const start = m.index;
+    const end = start + m[0].length;
+    const before = text.slice(Math.max(0, start - 22), start);
+    if (NOT_A_CODE_BEFORE.test(before) || CURRENCY_BEFORE.test(before)) continue;
+    // part of a decimal such as 351.69
+    if (text[end] === '.' && /\d/.test(text[end + 1] || '')) continue;
+    if (start > 1 && text[start - 1] === '.' && /\d/.test(text[start - 2])) continue;
+
+    let score = 1;
+    const around = text.slice(Math.max(0, start - 45), Math.min(text.length, end + 30));
+    if (OTP_KEYWORD.test(around)) score += 5;
+    if (m[0].length === 6) score += 2;
+    else if (m[0].length === 4 || m[0].length === 8) score += 1;
+
+    if (score > bestScore) {
+      best = m[0];
+      bestScore = score;
+    }
   }
-  // Fallback: standalone 4-8 digit number
-  const numbers = text.match(/\b\d{4,8}\b/g);
-  if (numbers && numbers.length > 0) {
-    return numbers[0];
-  }
-  return null;
+  return best;
 }
 
 /**
