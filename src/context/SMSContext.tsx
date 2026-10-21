@@ -9,6 +9,17 @@ import {
   ConversationCategory,
 } from '../types.ts';
 import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES, INITIAL_CONTACTS } from '../utils/seedData.ts';
+import { applyPalette, SystemPalettes } from '../theme/dynamicColor.ts';
+import type { BackupSms } from '../services/smsBridge.ts';
+import {
+  loadSpamModel,
+  scoreSms,
+  learnSms,
+  isSpamScore,
+  senderKey,
+  SPAM_THRESHOLDS,
+  SpamScore,
+} from '../spam/classifier.ts';
 import { soundFx, getAvatarColorClasses, extractOtpCode, getInitials, categorizeSms } from '../utils/smsUtils.ts';
 import {
   smsBridge,
@@ -27,7 +38,13 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   smsDeliveryReports: true,
   characterCounterEnabled: true,
   groupSmsIndividual: true,
+  profilePhoto: null,
+  profileName: '',
   spamProtectionEnabled: true,
+  spamSensitivity: 'balanced',
+  spamAllow: [],
+  spamBlock: [],
+  spamLearned: {},
   autoReplyEnabled: true,
   emergencyAlerts: true,
   showCategoriesTabs: true,
@@ -73,7 +90,13 @@ interface SMSContextType {
     unread: number;
     archived: number;
     blocked: number;
+    spam: number;
   };
+  // Spam protection
+  spamConversationIds: Set<string>;
+  isSpamConversation: (conversationId: string) => boolean;
+  markNotSpam: (conversationId: string) => void;
+  reportSpam: (conversationId: string) => void;
 
   // Notification & OTP State
   showOtpInNotifications: boolean;
@@ -110,8 +133,9 @@ interface SMSContextType {
   startNewConversation: (contactOrNumber: { name?: string; phoneNumber: string; category?: ConversationCategory }) => string;
   simulateIncomingSms: (conversationId: string, text: string) => void;
   resetToDemoData: () => void;
-  exportSmsBackup: () => void;
-  importSmsBackup: (jsonData: string) => boolean;
+  backupSmsToFile: () => Promise<{ ok: boolean; message: string }>;
+  restoreSmsFromJson: (jsonData: string) => Promise<{ ok: boolean; message: string }>;
+  pickAndRestoreSms: () => Promise<{ ok: boolean; message: string }>;
   cleanExpiredOtps: () => number;
   starredMessages: (Message & { conversation?: Conversation })[];
 }
@@ -171,10 +195,50 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [isDarkMode]);
 
-  // Keep Android's status / navigation bar area and icon colours in step with the app theme
+  // Material You: follow the phone's wallpaper colours (Android 12+), refreshed whenever the app is reopened
+  const [systemPalette, setSystemPalette] = useState<SystemPalettes | null>(null);
   useEffect(() => {
-    smsBridge.setSystemBarsTheme(isDarkMode);
-  }, [isDarkMode]);
+    let cancelled = false;
+    const load = async () => {
+      const palette = await smsBridge.getSystemColors();
+      if (cancelled) return;
+      setSystemPalette((prev) => (JSON.stringify(prev) === JSON.stringify(palette) ? prev : palette));
+    };
+    load();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, []);
+
+  // Apply the colours, then tell Android which colour to paint behind the status / navigation bars
+  useEffect(() => {
+    applyPalette(systemPalette);
+    const sendBars = () => {
+      const styles = getComputedStyle(document.documentElement);
+      const surface = styles.getPropertyValue(isDarkMode ? '--c-d0' : '--c-surface').trim();
+      smsBridge.setSystemBarsTheme(isDarkMode, surface || undefined);
+    };
+    sendBars();
+
+    // Rotating the phone resets the area behind the status bar, so paint it again afterwards
+    let timer: number | undefined;
+    const onResize = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(sendBars, 150);
+    };
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [systemPalette, isDarkMode]);
 
   // Sync sound setting
   useEffect(() => {
@@ -435,9 +499,167 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBanner(null);
   };
 
+  // ---------------------------------------------------------------
+  // Spam protection (on-device model trained from the Indian Telecom SMS Spam Collection)
+  // ---------------------------------------------------------------
+  const [spamModelReady, setSpamModelReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    loadSpamModel().then((m) => {
+      if (!cancelled && m) setSpamModelReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Scores never change for a given message, so remember them
+  const spamScoreCache = useRef<Map<string, SpamScore | null>>(new Map());
+  const spamLearnedSeen = useRef<Record<string, number> | undefined>(undefined);
+  const scoreMessageCached = (id: string, text: string): SpamScore | null => {
+    const cached = spamScoreCache.current.get(id);
+    if (cached !== undefined) return cached;
+    const score = scoreSms(text, settings.spamLearned);
+    if (score) spamScoreCache.current.set(id, score);
+    return score;
+  };
+
+  const spamConversationIds = useMemo(() => {
+    const spamIds = new Set<string>();
+    if (!settings.spamProtectionEnabled || !spamModelReady) return spamIds;
+
+    // learned weights changed: earlier scores are out of date
+    if (spamLearnedSeen.current !== settings.spamLearned) {
+      spamScoreCache.current.clear();
+      spamLearnedSeen.current = settings.spamLearned;
+    }
+
+    const contactKeys = new Set(contacts.map((c) => senderKey(c.phoneNumber)));
+    const allow = new Set(settings.spamAllow);
+    const block = new Set(settings.spamBlock);
+
+    // newest message from them, and whether you ever wrote back, per conversation
+    const lastIncoming = new Map<string, Message>();
+    const repliedTo = new Set<string>();
+    for (const m of messages) {
+      if (m.isScheduled) continue;
+      if (m.sender === 'me') {
+        repliedTo.add(m.conversationId);
+        continue;
+      }
+      const prev = lastIncoming.get(m.conversationId);
+      if (!prev || m.timestamp > prev.timestamp) lastIncoming.set(m.conversationId, m);
+    }
+
+    for (const conv of conversations) {
+      const key = senderKey(conv.phoneNumber);
+      if (block.has(key)) {
+        spamIds.add(conv.id);
+        continue;
+      }
+      // People you know, people you have written to and senders you cleared are never spam
+      if (allow.has(key) || repliedTo.has(conv.id) || contactKeys.has(key)) continue;
+      const msg = lastIncoming.get(conv.id);
+      if (!msg) continue;
+      const score = scoreMessageCached(msg.id, msg.text);
+      if (score && isSpamScore(score, conv.phoneNumber, settings.spamSensitivity)) spamIds.add(conv.id);
+    }
+    return spamIds;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    conversations,
+    messages,
+    contacts,
+    spamModelReady,
+    settings.spamProtectionEnabled,
+    settings.spamSensitivity,
+    settings.spamAllow,
+    settings.spamBlock,
+    settings.spamLearned,
+  ]);
+
+  const isSpamConversation = useCallback(
+    (conversationId: string) => spamConversationIds.has(conversationId),
+    [spamConversationIds]
+  );
+
+  // Learn from the newest few messages a sender has sent you (never uploaded, only word scores are kept)
+  const learnFromConversation = (conv: Conversation, spam: boolean): Record<string, number> => {
+    const incoming = messagesRef.current
+      .filter((m) => m.conversationId === conv.id && m.sender !== 'me' && !m.isScheduled)
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 3);
+    let learned = settings.spamLearned ?? {};
+    for (const m of incoming) learned = learnSms(m.text, spam, learned);
+    return learned;
+  };
+
+  const markNotSpam = useCallback(
+    (conversationId: string) => {
+      const conv = conversationsRef.current.find((c) => c.id === conversationId);
+      if (!conv) return;
+      const key = senderKey(conv.phoneNumber);
+      updateSettings({
+        spamAllow: Array.from(new Set([...settings.spamAllow, key])),
+        spamBlock: settings.spamBlock.filter((k) => k !== key),
+        spamLearned: learnFromConversation(conv, false),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [settings.spamAllow, settings.spamBlock, settings.spamLearned, updateSettings]
+  );
+
+  const reportSpam = useCallback(
+    (conversationId: string) => {
+      const conv = conversationsRef.current.find((c) => c.id === conversationId);
+      if (!conv) return;
+      const key = senderKey(conv.phoneNumber);
+      updateSettings({
+        spamBlock: Array.from(new Set([...settings.spamBlock, key])),
+        spamAllow: settings.spamAllow.filter((k) => k !== key),
+        spamLearned: learnFromConversation(conv, true),
+      });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [settings.spamAllow, settings.spamBlock, settings.spamLearned, updateSettings]
+  );
+
+  // Would this brand-new message be spam? (used to keep its notification quiet)
+  const isIncomingSpam = (existing: Conversation | undefined, sender: string, body: string): boolean => {
+    if (!settings.spamProtectionEnabled || !spamModelReady) return false;
+    const key = senderKey(sender);
+    if (settings.spamBlock.includes(key)) return true;
+    if (settings.spamAllow.includes(key)) return false;
+    if (contacts.some((c) => senderKey(c.phoneNumber) === key)) return false;
+    if (existing && messagesRef.current.some((m) => m.conversationId === existing.id && m.sender === 'me')) {
+      return false;
+    }
+    const score = scoreSms(body, settings.spamLearned);
+    return !!score && isSpamScore(score, sender, settings.spamSensitivity);
+  };
+
+  // Let the Android side know, so spam notifications stay silent even when Ping is closed
+  useEffect(() => {
+    smsBridge.setSpamConfig({
+      enabled: settings.spamProtectionEnabled,
+      threshold: SPAM_THRESHOLDS[settings.spamSensitivity as "relaxed" | "balanced" | "strict"],
+      allow: settings.spamAllow,
+      block: settings.spamBlock,
+      learned: settings.spamLearned ?? {},
+    });
+  }, [
+    settings.spamProtectionEnabled,
+    settings.spamSensitivity,
+    settings.spamAllow,
+    settings.spamBlock,
+    settings.spamLearned,
+  ]);
+
   // Category counts
   const categoryCounts = useMemo(() => {
-    const active = conversations.filter((c) => !c.isArchived && !c.isBlocked);
+    const active = conversations.filter(
+      (c) => !c.isArchived && !c.isBlocked && !spamConversationIds.has(c.id)
+    );
     return {
       all: active.length,
       personal: active.filter((c) => c.category === 'personal').length,
@@ -446,8 +668,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unread: active.filter((c) => c.unreadCount > 0).length,
       archived: conversations.filter((c) => c.isArchived).length,
       blocked: conversations.filter((c) => c.isBlocked).length,
+      spam: conversations.filter(
+        (c) => spamConversationIds.has(c.id) && !c.isArchived && !c.isBlocked
+      ).length,
     };
-  }, [conversations]);
+  }, [conversations, spamConversationIds]);
 
   const activeConversation = useMemo(() => {
     return conversations.find((c) => c.id === activeConversationId) || null;
@@ -546,6 +771,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let convId = existing?.id;
       let targetConv = existing;
       const isBlocked = !!existing?.isBlocked;
+      const looksLikeSpam = isIncomingSpam(existing, cleanSender, cleanBody);
 
       if (!existing) {
         convId = `conv-${Date.now()}`;
@@ -595,8 +821,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setMessages((prev) => [...prev, newMsg]);
 
-      // Blocked senders are still stored, but never make a sound or show a banner.
-      if (!isBlocked) {
+      // Blocked and spam senders are still stored, but never make a sound or show a banner.
+      if (!isBlocked && !looksLikeSpam) {
         soundFx.playReceived();
         if (targetConv) {
           dispatchIncomingNotification(targetConv, cleanBody);
@@ -874,41 +1100,107 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications([]);
   }, []);
 
-  // Export SMS Backup as JSON
-  const exportSmsBackup = useCallback(() => {
-    const backupData = {
-      version: '2.0',
-      exportedAt: new Date().toISOString(),
-      conversations,
-      messages,
-      contacts,
-    };
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `ping-sms-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [conversations, messages, contacts]);
-
-  // Import SMS Backup from JSON
-  const importSmsBackup = useCallback((jsonData: string): boolean => {
+  // ---------------------------------------------------------------
+  // Backup & restore (to a file the user chooses)
+  // ---------------------------------------------------------------
+  const backupSmsToFile = useCallback(async (): Promise<{ ok: boolean; message: string }> => {
     try {
-      const data = JSON.parse(jsonData);
-      if (Array.isArray(data.conversations) && Array.isArray(data.messages)) {
+      // The phone's own messages (all of them), when Ping may read them
+      let deviceSms: BackupSms[] = [];
+      if (isNativePlatform) {
+        const perms = await smsBridge.checkPermissions();
+        if (perms.readSms) {
+          const raw = await smsBridge.readDeviceSms(200000);
+          deviceSms = raw.map((m) => ({
+            address: m.address,
+            body: m.body,
+            date: m.date,
+            isSent: m.isSent,
+            isRead: m.isRead,
+          }));
+        }
+      }
+
+      const backup = {
+        app: 'Ping',
+        version: 3,
+        createdAt: new Date().toISOString(),
+        sms: deviceSms,
+        conversations: conversationsRef.current,
+        messages: messagesRef.current,
+        contacts,
+      };
+      const json = JSON.stringify(backup);
+      const fileName = `ping-sms-backup-${new Date().toISOString().slice(0, 10)}.json`;
+
+      if (isNativePlatform) {
+        const res = await smsBridge.saveBackupFile(fileName, json);
+        if (!res.saved) return { ok: false, message: 'Backup cancelled' };
+      } else {
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+      const count = deviceSms.length || messagesRef.current.length;
+      return { ok: true, message: `Backed up ${count} messages` };
+    } catch (err) {
+      return { ok: false, message: `Backup failed: ${err instanceof Error ? err.message : 'unknown error'}` };
+    }
+  }, [isNativePlatform, contacts]);
+
+  const restoreSmsFromJson = useCallback(
+    async (jsonData: string): Promise<{ ok: boolean; message: string }> => {
+      let data: any;
+      try {
+        data = JSON.parse(jsonData);
+      } catch {
+        return { ok: false, message: 'That file is not a valid Ping backup.' };
+      }
+      const hasState = Array.isArray(data?.conversations) && Array.isArray(data?.messages);
+      const sms: BackupSms[] = Array.isArray(data?.sms) ? data.sms : [];
+      if (!hasState && sms.length === 0) {
+        return { ok: false, message: 'That file is not a valid Ping backup.' };
+      }
+
+      if (hasState) {
         setConversations(data.conversations);
         setMessages(data.messages);
-        if (Array.isArray(data.contacts)) {
-          setContacts(data.contacts);
-        }
-        return true;
+        if (Array.isArray(data.contacts)) setContacts(data.contacts);
       }
-      return false;
-    } catch {
-      return false;
+      let note = hasState ? 'Restored your conversations in Ping.' : '';
+
+      if (isNativePlatform && sms.length > 0) {
+        if (isDefaultSms) {
+          try {
+            const res = await smsBridge.restoreDeviceSms(sms);
+            note = `Restored ${res.inserted} messages to your phone (${res.skipped} were already there).`;
+            await syncRef.current();
+          } catch (err) {
+            console.warn('restoreDeviceSms failed:', err);
+            note += " Could not write the messages into your phone's SMS.";
+          }
+        } else {
+          note += ' To also put the messages back into your phone, make Ping the default SMS app and restore again.';
+        }
+      }
+      return { ok: true, message: note.trim() };
+    },
+    [isNativePlatform, isDefaultSms]
+  );
+
+  const pickAndRestoreSms = useCallback(async (): Promise<{ ok: boolean; message: string }> => {
+    try {
+      const res = await smsBridge.pickBackupFile();
+      if (res.cancelled || !res.content) return { ok: false, message: 'No file chosen' };
+      return await restoreSmsFromJson(res.content);
+    } catch (err) {
+      return { ok: false, message: `Restore failed: ${err instanceof Error ? err.message : 'unknown error'}` };
     }
-  }, []);
+  }, [restoreSmsFromJson]);
 
   // Clean expired OTPs older than 24 hours
   const cleanExpiredOtps = useCallback((): number => {
@@ -1274,6 +1566,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settings,
     updateSettings,
     categoryCounts,
+    spamConversationIds,
+    isSpamConversation,
+    markNotSpam,
+    reportSpam,
     showOtpInNotifications: settings.showOtpInNotifications,
     activeBanner,
     notifications,
@@ -1321,8 +1617,9 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     startNewConversation,
     simulateIncomingSms,
     resetToDemoData,
-    exportSmsBackup,
-    importSmsBackup,
+    backupSmsToFile,
+    restoreSmsFromJson,
+    pickAndRestoreSms,
     cleanExpiredOtps,
     starredMessages,
   };

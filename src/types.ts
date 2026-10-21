@@ -48,7 +48,8 @@ export type FilterCategory =
   | 'unread'
   | 'starred'
   | 'archived'
-  | 'blocked';
+  | 'blocked'
+  | 'spam';
 
 export interface SchedulePresetOption {
   id: 'later_today' | 'tonight' | 'tomorrow_morning' | 'custom';
@@ -80,7 +81,18 @@ export interface SmsAppSettings {
   smsDeliveryReports: boolean;
   characterCounterEnabled: boolean;
   groupSmsIndividual: boolean;
+  /** Profile picture, stored on this phone only (a small square JPEG as a data URL) */
+  profilePhoto: string | null;
+  profileName: string;
   spamProtectionEnabled: boolean;
+  /** How aggressively unknown senders are filtered into the Spam folder */
+  spamSensitivity: 'relaxed' | 'balanced' | 'strict';
+  /** Senders the user marked "Not spam" (sender keys, see senderKey()) */
+  spamAllow: string[];
+  /** Senders the user reported as spam */
+  spamBlock: string[];
+  /** Small per-word score adjustments learned from the user's Not spam / Report spam taps (on this phone only) */
+  spamLearned: Record<string, number>;
   autoReplyEnabled: boolean;
   emergencyAlerts: boolean;
 

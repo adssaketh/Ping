@@ -1,4 +1,5 @@
 import { registerPlugin, Capacitor } from '@capacitor/core';
+import type { SystemPalettes } from '../theme/dynamicColor.ts';
 
 export interface NativeSmsMessage {
   id: string;
@@ -8,6 +9,14 @@ export interface NativeSmsMessage {
   date: number;
   isRead: boolean;
   isSent: boolean;
+}
+
+export interface BackupSms {
+  address: string;
+  body: string;
+  date: number;
+  isSent: boolean;
+  isRead?: boolean;
 }
 
 export interface NativeContact {
@@ -41,7 +50,12 @@ interface PingSmsPluginInterface {
   readSms(options?: { limit?: number }): Promise<{ messages: NativeSmsMessage[]; count: number }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   markThreadRead(options: { address: string }): Promise<{ updated: number }>;
-  setSystemBarsTheme(options: { dark: boolean }): Promise<void>;
+  setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
+  getSystemColors(): Promise<SystemPalettes>;
+  saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
+  pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
+  restoreSms(options: { messages: BackupSms[] }): Promise<{ inserted: number; skipped: number }>;
+  setSpamConfig(options: { enabled: boolean; threshold: number; allow: string[]; block: string[]; learned: Record<string, number> }): Promise<void>;
   sendSms(options: {
     to: string;
     message: string;
@@ -165,12 +179,55 @@ export const smsBridge = {
     }
   },
 
-  async setSystemBarsTheme(dark: boolean): Promise<void> {
+  async setSystemBarsTheme(dark: boolean, color?: string): Promise<void> {
     if (!isNativeAndroid()) return;
     try {
-      await PingSms.setSystemBarsTheme({ dark });
+      await PingSms.setSystemBarsTheme({ dark, color });
     } catch (err) {
       console.warn('setSystemBarsTheme failed:', err);
+    }
+  },
+
+  /** Opens Android's "save as" picker and writes the backup text to the chosen file. */
+  async saveBackupFile(fileName: string, content: string): Promise<{ saved: boolean }> {
+    return PingSms.saveBackupFile({ fileName, content });
+  },
+
+  /** Opens Android's file picker and returns the text of the chosen backup file. */
+  async pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }> {
+    return PingSms.pickBackupFile();
+  },
+
+  /** Writes backed-up messages into the phone's SMS store (Ping must be the default SMS app). */
+  async restoreDeviceSms(messages: BackupSms[]): Promise<{ inserted: number; skipped: number }> {
+    return PingSms.restoreSms({ messages });
+  },
+
+  /** Tells the Android side how to treat spam, so spam notifications can be kept quiet. */
+  async setSpamConfig(config: {
+    enabled: boolean;
+    threshold: number;
+    allow: string[];
+    block: string[];
+    learned: Record<string, number>;
+  }): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.setSpamConfig(config);
+    } catch (err) {
+      console.warn('setSpamConfig failed:', err);
+    }
+  },
+
+  /** Wallpaper-derived Material You palettes (Android 12+), or null when unavailable. */
+  async getSystemColors(): Promise<SystemPalettes | null> {
+    if (!isNativeAndroid()) return null;
+    try {
+      const res = await PingSms.getSystemColors();
+      return res && res.supported ? res : null;
+    } catch (err) {
+      console.warn('getSystemColors failed:', err);
+      return null;
     }
   },
 

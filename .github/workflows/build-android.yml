@@ -31,6 +31,12 @@ jobs:
         run: |
           npm ci || npm install --legacy-peer-deps
 
+      - name: Train spam model (Indian SMS spam dataset)
+        # Downloads junioralive/india-spam-sms-classification and trains the on-device model.
+        # If this step fails the build still uses the model already committed in public/.
+        continue-on-error: true
+        run: node scripts/train-spam-model.mjs
+
       - name: Build Web Production Assets
         run: npm run build
 

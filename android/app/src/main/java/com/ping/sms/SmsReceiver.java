@@ -18,6 +18,7 @@ import androidx.core.app.NotificationCompat;
 
 public class SmsReceiver extends BroadcastReceiver {
     private static final String CHANNEL_ID = "ping_sms_channel_v2";
+    private static final String SPAM_CHANNEL_ID = "ping_sms_spam_channel";
     private static final String CHANNEL_NAME = "SMS Notifications";
 
     @Override
@@ -80,6 +81,9 @@ public class SmsReceiver extends BroadcastReceiver {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
+        // Suspected spam still arrives, but silently (no pop-up, no sound)
+        boolean spam = SpamFilter.isSpam(context, sender, body);
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
@@ -97,6 +101,14 @@ public class SmsReceiver extends BroadcastReceiver {
                     .build()
             );
             manager.createNotificationChannel(channel);
+
+            NotificationChannel spamChannel = new NotificationChannel(
+                SPAM_CHANNEL_ID,
+                "Possible spam",
+                NotificationManager.IMPORTANCE_LOW
+            );
+            spamChannel.setDescription("Texts Ping suspects are spam. Shown quietly.");
+            manager.createNotificationChannel(spamChannel);
         }
 
         int flags = PendingIntent.FLAG_UPDATE_CURRENT
@@ -109,21 +121,21 @@ public class SmsReceiver extends BroadcastReceiver {
         openIntent.putExtra("body", body);
         PendingIntent pendingIntent = PendingIntent.getActivity(context, notificationId, openIntent, flags);
 
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, spam ? SPAM_CHANNEL_ID : CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_ping)
             .setColor(0xFF0B57D0)
-            .setContentTitle(sender)
+            .setContentTitle(spam ? "Possible spam \u00B7 " + sender : sender)
             .setContentText(body)
             .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
+            .setPriority(spam ? NotificationCompat.PRIORITY_LOW : NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(spam ? 0 : NotificationCompat.DEFAULT_ALL)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent);
 
         // "Copy OTP" button, shown on the pop-up banner and in the notification shade
         String otp = OtpExtractor.extract(body);
-        if (otp != null) {
+        if (otp != null && !spam) {
             Intent copyIntent = new Intent(context, CopyOtpReceiver.class);
             copyIntent.setAction(CopyOtpReceiver.ACTION_COPY_OTP);
             copyIntent.putExtra(CopyOtpReceiver.EXTRA_OTP, otp);

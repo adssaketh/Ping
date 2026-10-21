@@ -1,14 +1,116 @@
 @import "tailwindcss";
 
+/* The in-app light/dark switch toggles a `dark` class on <html>, so `dark:` must follow that class
+   (Tailwind v4 would otherwise only follow the phone's own dark-mode setting). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------ *
+ *  Colour slots (Material 3 tonal roles)
+ *  These are the baseline Ping colours. On Android 12+ the app replaces
+ *  them at runtime with tones taken from the phone's wallpaper colours
+ *  (see src/theme/dynamicColor.ts), so everything re-tints automatically.
+ * ------------------------------------------------------------------ */
+:root {
+  --c-primary: #0B57D0;
+  --c-primary-hover: #0842A0;
+  --c-primary-container: #D3E3FD;
+  --c-primary-light: #A8C7FA;
+  --c-primary-deep: #004A77;
+  --c-on-primary-deep: #041E49;
+
+  --c-on-surface: #1F1F1F;
+  --c-on-surface-dk: #E2E2E2;
+  --c-outline: #747775;
+  --c-outline-dk: #8E918F;
+  --c-variant: #444746;
+  --c-variant-dk: #C4C7C5;
+  --c-line: #E0E2EC;
+  --c-surface: #F8FAFD;
+  --c-surface-hi: #EDF2FA;
+
+  --c-d0: #111318;
+  --c-d1: #1A1D23;
+  --c-d2: #1E2228;
+  --c-d3: #252A32;
+  --c-d4: #2D3139;
+  --c-d5: #353A44;
+
+  /* Motion tokens (Material 3 Expressive) */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+@theme inline {
+  --color-m3-primary: var(--c-primary);
+  --color-m3-primary-hover: var(--c-primary-hover);
+  --color-m3-primary-container: var(--c-primary-container);
+  --color-m3-primary-light: var(--c-primary-light);
+  --color-m3-primary-deep: var(--c-primary-deep);
+  --color-m3-on-primary-deep: var(--c-on-primary-deep);
+  --color-m3-on-surface: var(--c-on-surface);
+  --color-m3-on-surface-dk: var(--c-on-surface-dk);
+  --color-m3-outline: var(--c-outline);
+  --color-m3-outline-dk: var(--c-outline-dk);
+  --color-m3-variant: var(--c-variant);
+  --color-m3-variant-dk: var(--c-variant-dk);
+  --color-m3-line: var(--c-line);
+  --color-m3-surface: var(--c-surface);
+  --color-m3-surface-hi: var(--c-surface-hi);
+  --color-m3-d0: var(--c-d0);
+  --color-m3-d1: var(--c-d1);
+  --color-m3-d2: var(--c-d2);
+  --color-m3-d3: var(--c-d3);
+  --color-m3-d4: var(--c-d4);
+  --color-m3-d5: var(--c-d5);
+}
+
 @layer base {
   * {
     -webkit-tap-highlight-color: transparent;
   }
 
+  html {
+    color-scheme: light;
+    background-color: var(--c-surface);
+  }
+  html.dark {
+    color-scheme: dark;
+    background-color: var(--c-d0);
+  }
+
   body {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Google Sans', 'Google Sans Text', 'Roboto Flex', Roboto, system-ui, -apple-system,
+      'Segoe UI', sans-serif;
     user-select: none;
     -webkit-user-select: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    overscroll-behavior: none;
+  }
+
+  /* Buttery-smooth state changes and press feedback on every control */
+  button,
+  [role='button'],
+  a,
+  input,
+  textarea {
+    transition-property: background-color, color, border-color, box-shadow, opacity, transform;
+    transition-duration: 220ms;
+    transition-timing-function: var(--ease-emphasized);
+  }
+  button:not(:disabled):active,
+  [role='button']:active {
+    transform: scale(0.96);
+    transition-duration: 90ms;
+  }
+
+  /* Smooth, contained scrolling */
+  .overflow-y-auto,
+  .overflow-x-auto {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Allow text selection in message bubbles and inputs */
@@ -34,7 +136,21 @@
   }
 }
 
-/* Material 3 ripple and elevation utilities */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Only render list rows that are near the screen: keeps long inboxes at 60fps */
+.row-cv {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 76px;
+}
+
+/* Material 3 elevation utilities */
 .m3-elevation-1 {
   box-shadow: 0 1px 3px 1px rgba(0, 0, 0, 0.08), 0 1px 2px 0 rgba(0, 0, 0, 0.12);
 }
@@ -45,4 +161,16 @@
 
 .m3-elevation-3 {
   box-shadow: 0 4px 8px 3px rgba(0, 0, 0, 0.12), 0 1px 3px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* Respect the phone's "remove animations" accessibility setting */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
