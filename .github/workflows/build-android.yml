@@ -53,6 +53,11 @@ jobs:
           fi
           npx cap sync android
 
+      - name: Remove duplicate launcher icon PNGs
+        # mipmap-anydpi-v26 must only hold the adaptive-icon XML files. PNGs with the same
+        # names there make Gradle fail with "Duplicate resources".
+        run: rm -f android/app/src/main/res/mipmap-anydpi-v26/*.png
+
       - name: Build Android APK
         working-directory: android
         run: |
