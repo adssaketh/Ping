@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy, fadeFast } from '../motion.ts';
 import { Search, X, UserPlus, Phone, ArrowRight, RefreshCw } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { getInitials } from '../utils/smsUtils.ts';
+import { searchContacts } from '../utils/contactSearch.ts';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -25,11 +26,9 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
   }, [query, isOpen]);
 
 
-  const filteredContacts = contacts.filter((c) => {
-    const q = query.toLowerCase().trim();
-    if (!q) return true;
-    return c.name.toLowerCase().includes(q) || c.phoneNumber.includes(q);
-  });
+  // Search runs on a slightly delayed copy of what you type, so typing itself never stutters
+  const deferredQuery = useDeferredValue(query);
+  const filteredContacts = useMemo(() => searchContacts(contacts, deferredQuery), [contacts, deferredQuery]);
 
   const isNumericQuery = /^[\d\s+\-().]+$/.test(query.trim()) && query.trim().length >= 3;
 

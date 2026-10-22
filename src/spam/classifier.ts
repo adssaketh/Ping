@@ -49,10 +49,14 @@ export function isSpamScore(score: SpamScore, sender: string, sensitivity: SpamS
 
 export { SPAM_THRESHOLDS };
 
-/** Stable key for a sender: the digits of a phone number, otherwise the lower-cased sender ID. */
+/**
+ * Stable key for a sender: for phone numbers the last 10 digits (so +91 94942 02618 and 9494202618 are the
+ * same sender), otherwise the lower-cased sender ID.
+ */
 export function senderKey(phoneNumberOrSender: string): string {
   const raw = (phoneNumberOrSender || '').trim();
   const digits = raw.replace(/\D/g, '');
+  if (digits.length >= 10) return digits.slice(-10);
   return digits.length >= 7 ? digits : raw.toLowerCase();
 }
 

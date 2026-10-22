@@ -54,6 +54,7 @@ interface PingSmsPluginInterface {
   getSystemColors(): Promise<SystemPalettes>;
   setBackEnabled(options: { enabled: boolean }): Promise<void>;
   consumeLaunchShortcut(): Promise<{ target?: string }>;
+  addContact(options: { phoneNumber: string; name?: string }): Promise<{ done: boolean }>;
   showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
   saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
@@ -217,6 +218,18 @@ export const smsBridge = {
   /** Writes backed-up messages into the phone's SMS store (Ping must be the default SMS app). */
   async restoreDeviceSms(messages: BackupSms[]): Promise<{ inserted: number; skipped: number }> {
     return PingSms.restoreSms({ messages });
+  },
+
+  /** Opens Android's contacts app with this number filled in (save as new or add to an existing contact). */
+  async addContact(phoneNumber: string, name?: string): Promise<boolean> {
+    if (!isNativeAndroid()) return false;
+    try {
+      await PingSms.addContact({ phoneNumber, name });
+      return true;
+    } catch (err) {
+      console.warn('addContact failed:', err);
+      return false;
+    }
   },
 
   /** The app-icon shortcut that started the app, if any (returned once). */

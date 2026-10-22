@@ -96,10 +96,12 @@ final class SpamFilter {
         }
     }
 
-    /** Digits of a phone number, otherwise the lower-cased sender ID (same as senderKey() in classifier.ts). */
+    /** Last 10 digits of a phone number, otherwise the lower-cased sender ID (same as senderKey() in classifier.ts). */
     static String senderKey(String sender) {
         String raw = sender == null ? "" : sender.trim();
         String digits = raw.replaceAll("\\D", "");
+        // the last 10 digits: +91 94942 02618 and 9494202618 are the same sender
+        if (digits.length() >= 10) return digits.substring(digits.length() - 10);
         return digits.length() >= 7 ? digits : raw.toLowerCase(Locale.ROOT);
     }
 

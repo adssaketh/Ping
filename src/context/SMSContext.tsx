@@ -11,6 +11,8 @@ import {
 import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES, INITIAL_CONTACTS } from '../utils/seedData.ts';
 import { applyPalette, SystemPalettes } from '../theme/dynamicColor.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
+import { isPhoneNumber, phoneKey } from '../utils/phone.ts';
+import { dedupeContacts } from '../utils/contactSearch.ts';
 import {
   loadSpamModel,
   scoreSms,
@@ -95,6 +97,10 @@ interface SMSContextType {
     spam: number;
   };
   // Spam protection
+  /** true when this number is already saved in your contacts (in any format) */
+  isContactNumber: (number: string) => boolean;
+  /** Opens the contacts app to save this number, then refreshes names in Ping */
+  addNumberToContacts: (number: string, name?: string) => Promise<boolean>;
   spamConversationIds: Set<string>;
   unreadCounts: { all: number; personal: number; transactions: number; services: number; promotions: number };
   isSpamConversation: (conversationId: string) => boolean;
@@ -524,6 +530,18 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBanner(null);
   };
 
+  // Contacts by number key: 9494202618, +919494202618 and 919494202618 are all the same person
+  const contactByKey = useMemo(() => {
+    const map = new Map<string, Contact>();
+    for (const c of contacts) {
+      const key = phoneKey(c.phoneNumber);
+      if (key && !map.has(key)) map.set(key, c);
+    }
+    return map;
+  }, [contacts]);
+  const contactForNumber = (number: string): Contact | undefined =>
+    isPhoneNumber(number) ? contactByKey.get(phoneKey(number)) : undefined;
+
   // ---------------------------------------------------------------
   // Spam protection (on-device model trained from the Indian Telecom SMS Spam Collection)
   // ---------------------------------------------------------------
@@ -560,8 +578,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const contactKeys = new Set(contacts.map((c) => senderKey(c.phoneNumber)));
-    const allow = new Set(settings.spamAllow);
-    const block = new Set(settings.spamBlock);
+    const allow = new Set(settings.spamAllow.map(senderKey));
+    const block = new Set(settings.spamBlock.map(senderKey));
 
     // newest message from them, and whether you ever wrote back, per conversation
     const lastIncoming = new Map<string, Message>();
@@ -650,18 +668,25 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   // Is this sender one of your contacts?
-  const isKnownContact = (sender: string): boolean => {
-    const key = senderKey(sender);
-    return contacts.some((c) => senderKey(c.phoneNumber) === key);
+  const isKnownContact = (sender: string): boolean => !!contactForNumber(sender);
+
+  const isContactNumber = (number: string): boolean => !!contactForNumber(number);
+
+  const addNumberToContacts = async (number: string, name?: string): Promise<boolean> => {
+    const opened = await smsBridge.addContact(number, name);
+    if (!opened) return false;
+    // back from the contacts app: read the contacts again so the new name shows up everywhere
+    await syncRef.current();
+    return true;
   };
 
   // Would this brand-new message be spam? (used to keep its notification quiet)
   const isIncomingSpam = (existing: Conversation | undefined, sender: string, body: string): boolean => {
     if (!settings.spamProtectionEnabled || !spamModelReady) return false;
     const key = senderKey(sender);
-    if (settings.spamBlock.includes(key)) return true;
-    if (settings.spamAllow.includes(key)) return false;
-    if (contacts.some((c) => senderKey(c.phoneNumber) === key)) return false;
+    if (settings.spamBlock.some((k) => senderKey(k) === key)) return true;
+    if (settings.spamAllow.some((k) => senderKey(k) === key)) return false;
+    if (contactForNumber(sender)) return false;
     if (existing && messagesRef.current.some((m) => m.conversationId === existing.id && m.sender === 'me')) {
       return false;
     }
@@ -674,8 +699,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     smsBridge.setSpamConfig({
       enabled: settings.spamProtectionEnabled,
       threshold: SPAM_THRESHOLDS[settings.spamSensitivity as "relaxed" | "balanced" | "strict"],
-      allow: settings.spamAllow,
-      block: settings.spamBlock,
+      allow: settings.spamAllow.map(senderKey),
+      block: settings.spamBlock.map(senderKey),
       learned: settings.spamLearned ?? {},
     });
   }, [
@@ -808,9 +833,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const time = timestamp || Date.now();
 
       // Find existing conversation matching sender phone number
+      const senderIsNumber = isPhoneNumber(cleanSender);
       const existing = conversations.find(
         (c) =>
-          c.phoneNumber.replace(/\D/g, '') === cleanSender.replace(/\D/g, '') ||
+          (senderIsNumber && isPhoneNumber(c.phoneNumber) && phoneKey(c.phoneNumber) === phoneKey(cleanSender)) ||
+          c.phoneNumber.toLowerCase() === cleanSender.toLowerCase() ||
           c.contactName.toLowerCase() === cleanSender.toLowerCase()
       );
 
@@ -821,12 +848,14 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!existing) {
         convId = `conv-${Date.now()}`;
-        const avatarColor = getAvatarColorClasses(cleanSender);
-        const category: ConversationCategory = categorizeSms(cleanSender, cleanBody, isKnownContact(cleanSender));
+        const knownContact = contactForNumber(cleanSender);
+        const displayName = knownContact ? knownContact.name : cleanSender;
+        const avatarColor = getAvatarColorClasses(displayName);
+        const category: ConversationCategory = categorizeSms(cleanSender, cleanBody, !!knownContact);
 
         targetConv = {
           id: convId,
-          contactName: cleanSender,
+          contactName: displayName,
           phoneNumber: cleanSender,
           avatarColor,
           category,
@@ -875,7 +904,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
     },
-    [conversations, activeConversationId, dispatchIncomingNotification]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversations, contacts, activeConversationId, dispatchIncomingNotification]
   );
 
   const sendMessage = useCallback((conversationId: string, text: string) => {
@@ -1060,8 +1090,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const startNewConversation = useCallback(
     (contactOrNumber: { name?: string; phoneNumber: string; category?: ConversationCategory }): string => {
       const cleanPhone = contactOrNumber.phoneNumber.trim();
-      const existing = conversations.find(
-        (c) => c.phoneNumber.replace(/\D/g, '') === cleanPhone.replace(/\D/g, '')
+      const existing = conversations.find((c) =>
+        isPhoneNumber(cleanPhone) && isPhoneNumber(c.phoneNumber)
+          ? phoneKey(c.phoneNumber) === phoneKey(cleanPhone)
+          : c.phoneNumber.toLowerCase() === cleanPhone.toLowerCase()
       );
 
       if (existing) {
@@ -1075,7 +1107,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       const newId = `conv-${Date.now()}`;
-      const name = contactOrNumber.name?.trim() || cleanPhone;
+      const name = contactOrNumber.name?.trim() || contactForNumber(cleanPhone)?.name || cleanPhone;
       const avatarColor = getAvatarColorClasses(name);
       const category: ConversationCategory = contactOrNumber.category || 'personal';
 
@@ -1097,7 +1129,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveConversationId(newId);
       return newId;
     },
-    [conversations]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [conversations, contacts]
   );
 
   const simulateIncomingSms = useCallback((conversationId: string, text: string) => {
@@ -1309,20 +1342,17 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const deviceContacts = await smsBridge.readDeviceContacts();
       if (deviceContacts && deviceContacts.length > 0) {
+        const fromDevice: Contact[] = deviceContacts.map((dc) => ({
+          id: `contact-${dc.id || phoneKey(dc.phoneNumber)}`,
+          name: dc.name || dc.phoneNumber,
+          phoneNumber: dc.phoneNumber,
+          avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
+          initials: getInitials(dc.name, dc.phoneNumber),
+        }));
         setContacts((prev) => {
-          const map = new Map<string, Contact>();
-          prev.forEach((c) => map.set(c.phoneNumber.replace(/\s+/g, ''), c));
-          deviceContacts.forEach((dc) => {
-            const cleanNum = dc.phoneNumber.replace(/\s+/g, '');
-            map.set(cleanNum, {
-              id: `contact-${dc.id || cleanNum}`,
-              name: dc.name || dc.phoneNumber,
-              phoneNumber: dc.phoneNumber,
-              avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
-              initials: getInitials(dc.name, dc.phoneNumber),
-            });
-          });
-          return Array.from(map.values());
+          const deviceKeys = new Set(fromDevice.map((c) => phoneKey(c.phoneNumber)));
+          const manual = prev.filter((c) => c.id.startsWith('contact-web-') && !deviceKeys.has(phoneKey(c.phoneNumber)));
+          return dedupeContacts([...fromDevice, ...manual]);
         });
         return deviceContacts.length;
       }
@@ -1354,28 +1384,34 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const contactNameMap = new Map<string, string>();
       if (contactList && contactList.length > 0) {
         contactList.forEach((c) => {
-          const clean = c.phoneNumber.replace(/\D/g, '');
-          if (clean) contactNameMap.set(clean, c.name);
+          const key = phoneKey(c.phoneNumber);
+          if (key) contactNameMap.set(key, c.name);
         });
 
-        const contactsSignature = `${contactList.length}:${contactList[0]?.id}:${contactList[contactList.length - 1]?.id}`;
+        // changes whenever a contact is added, renamed or removed
+        let hash = 5381;
+        for (const c of contactList) {
+          const part = `${c.id}|${c.name}|${c.phoneNumber};`;
+          for (let i = 0; i < part.length; i++) hash = ((hash << 5) + hash + part.charCodeAt(i)) | 0;
+        }
+        const contactsSignature = `${contactList.length}:${hash}`;
         if (contactsSignature !== lastContactsSignature.current) {
           lastContactsSignature.current = contactsSignature;
-          startTransition(() => setContacts((prev) => {
-          const map = new Map<string, Contact>();
-          prev.forEach((c) => map.set(c.phoneNumber.replace(/\s+/g, ''), c));
-          contactList.forEach((dc) => {
-            const cleanNum = dc.phoneNumber.replace(/\s+/g, '');
-            map.set(cleanNum, {
-              id: `contact-${dc.id || cleanNum}`,
-              name: dc.name || dc.phoneNumber,
-              phoneNumber: dc.phoneNumber,
-              avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
-              initials: getInitials(dc.name, dc.phoneNumber),
-            });
-          });
-          return Array.from(map.values());
+          const fromDevice: Contact[] = contactList.map((dc) => ({
+            id: `contact-${dc.id || phoneKey(dc.phoneNumber)}`,
+            name: dc.name || dc.phoneNumber,
+            phoneNumber: dc.phoneNumber,
+            avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
+            initials: getInitials(dc.name, dc.phoneNumber),
           }));
+          // the phone's contacts replace the old list (no leftovers or duplicates); contacts added by hand stay
+          startTransition(() =>
+            setContacts((prev) => {
+              const deviceKeys = new Set(fromDevice.map((c) => phoneKey(c.phoneNumber)));
+              const manual = prev.filter((c) => c.id.startsWith('contact-web-') && !deviceKeys.has(phoneKey(c.phoneNumber)));
+              return dedupeContacts([...fromDevice, ...manual]);
+            })
+          );
         }
       }
 
@@ -1425,7 +1461,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const previousById = new Map<string, Conversation>();
       for (const c of previousConversations) {
         previousById.set(c.id, c);
-        const d = c.phoneNumber.replace(/\D/g, '');
+        const d = isPhoneNumber(c.phoneNumber) ? phoneKey(c.phoneNumber) : '';
         if (d.length >= 7) previousByDigits.set(d, c);
       }
 
@@ -1436,8 +1472,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const firstMsg = groupMsgs[0];
         const lastMsg = groupMsgs[groupMsgs.length - 1];
         const rawAddress = firstMsg.address || 'Unknown';
-        const cleanDigits = rawAddress.replace(/\D/g, '');
-        const matchedName = contactNameMap.get(cleanDigits) || rawAddress;
+        const cleanDigits = isPhoneNumber(rawAddress) ? phoneKey(rawAddress) : '';
+        const matchedName = (cleanDigits && contactNameMap.get(cleanDigits)) || rawAddress;
 
         const convId = `conv-dev-${key}`;
         const category = categorizeSms(rawAddress, lastMsg.body, contactNameMap.has(cleanDigits));
@@ -1490,13 +1526,13 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newByDigits = new Map<string, Conversation>();
       for (const c of newConversationsList) {
         newById.set(c.id, c);
-        const d = c.phoneNumber.replace(/\D/g, '');
+        const d = isPhoneNumber(c.phoneNumber) ? phoneKey(c.phoneNumber) : '';
         if (d.length >= 7) newByDigits.set(d, c);
       }
       keepLocal.forEach((m) => {
         const oldConv = previousById.get(m.conversationId);
         if (!oldConv) return;
-        const digits = oldConv.phoneNumber.replace(/\D/g, '');
+        const digits = isPhoneNumber(oldConv.phoneNumber) ? phoneKey(oldConv.phoneNumber) : '';
         const found = newById.get(oldConv.id) ?? (digits.length >= 7 ? newByDigits.get(digits) : undefined);
         const target: Conversation = found ?? { ...oldConv };
         if (!found) {
@@ -1681,6 +1717,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateSettings,
     categoryCounts,
     spamConversationIds,
+    isContactNumber,
+    addNumberToContacts,
     unreadCounts,
     isSpamConversation,
     markNotSpam,

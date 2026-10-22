@@ -14,10 +14,12 @@ import {
   PinOff,
   ShieldAlert,
   Trash2,
+  UserPlus,
 } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { extractOtpCode, getInitials } from '../utils/smsUtils.ts';
 import { copyText } from '../utils/clipboard.ts';
+import { isPhoneNumber } from '../utils/phone.ts';
 import { spring, fadeFast } from '../motion.ts';
 
 interface ConversationActionSheetProps {
@@ -47,6 +49,9 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
     isSpamConversation,
     reportSpam,
     markNotSpam,
+    isNativePlatform,
+    isContactNumber,
+    addNumberToContacts,
   } = useSMS();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -118,6 +123,16 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
       label: conv.isArchived ? 'Unarchive' : 'Archive',
       onClick: runAndClose(() => toggleArchiveConversation(conv.id)),
     });
+    if (isNativePlatform && isPhoneNumber(conv.phoneNumber) && !isContactNumber(conv.phoneNumber)) {
+      actions.push({
+        key: 'add-contact',
+        icon: UserPlus,
+        label: 'Add to contacts',
+        onClick: runAndClose(() => {
+          addNumberToContacts(conv.phoneNumber);
+        }),
+      });
+    }
     actions.push({
       key: 'spam',
       icon: ShieldAlert,

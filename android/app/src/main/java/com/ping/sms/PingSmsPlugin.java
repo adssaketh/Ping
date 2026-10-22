@@ -102,6 +102,39 @@ public class PingSmsPlugin extends Plugin {
         return true;
     }
 
+    /**
+     * Opens Android's contacts app with the number filled in, so the user can save it as a new contact or add
+     * it to an existing one. Ping does not need permission to change contacts: the contacts app does the saving.
+     */
+    @PluginMethod
+    public void addContact(PluginCall call) {
+        String number = call.getString("phoneNumber", "");
+        String name = call.getString("name", "");
+        if (number == null || number.trim().isEmpty()) {
+            call.reject("INVALID_PARAMS", "phoneNumber is required");
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_INSERT_OR_EDIT);
+        intent.setType(ContactsContract.Contacts.CONTENT_ITEM_TYPE);
+        intent.putExtra(ContactsContract.Intents.Insert.PHONE, number.trim());
+        if (name != null && !name.trim().isEmpty()) {
+            intent.putExtra(ContactsContract.Intents.Insert.NAME, name.trim());
+        }
+        try {
+            startActivityForResult(call, intent, "addContactResult");
+        } catch (Exception e) {
+            call.reject("NO_CONTACTS_APP", "Could not open the contacts app");
+        }
+    }
+
+    @ActivityCallback
+    private void addContactResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        JSObject ret = new JSObject();
+        ret.put("done", true);
+        call.resolve(ret);
+    }
+
     /** An app-icon shortcut was tapped while the app was already running. */
     public static void notifyShortcut(String target) {
         if (instance == null) return;

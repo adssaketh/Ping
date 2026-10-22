@@ -17,6 +17,7 @@ import {
   Archive,
   ArchiveRestore,
   ShieldAlert,
+  UserPlus,
   Info,
   Calendar,
   Sparkles,
@@ -36,6 +37,7 @@ import { ScheduleModal } from './ScheduleModal.tsx';
 import { MessageActionSheet } from './MessageActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
+import { isPhoneNumber } from '../utils/phone.ts';
 
 interface ChatViewProps {
   onBack: () => void;
@@ -59,6 +61,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     isSpamConversation,
     markNotSpam,
     reportSpam,
+    isNativePlatform,
+    isContactNumber,
+    addNumberToContacts,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -324,6 +329,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                   {activeConversation.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                   <span>{activeConversation.isArchived ? 'Unarchive' : 'Archive'}</span>
                 </button>
+
+                {isNativePlatform &&
+                  isPhoneNumber(activeConversation.phoneNumber) &&
+                  !isContactNumber(activeConversation.phoneNumber) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        addNumberToContacts(activeConversation.phoneNumber);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-m3-variant dark:text-m3-variant-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-xl transition-colors"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      <span>Add to contacts</span>
+                    </button>
+                  )}
 
                 <button
                   type="button"
