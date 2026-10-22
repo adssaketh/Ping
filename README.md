@@ -1,7 +1,3 @@
-<img width="1264" height="2624" alt="1000124507" src="https://github.com/user-attachments/assets/d521dae6-6203-4f43-9d24-cd7d1df5b4a5" />
-<img width="1264" height="2632" alt="1000124506" src="https://github.com/user-attachments/assets/47d20cbc-5e13-449c-b30c-ac59069d581b" />
-<img width="1264" height="2500" alt="1000124505" src="https://github.com/user-attachments/assets/c168bba5-9ba1-4f9e-8b46-5db428c208a0" />
-<img width="1264" height="2640" alt="1000124504" src="https://github.com/user-attachments/assets/e9c61309-d7a2-4636-a9e0-37a0e17175e5" />
 # Ping
 
 Ping is an open-source SMS app for Android with Material You colours, swipeable message categories, copy-OTP
@@ -22,3 +18,8 @@ The model is trained during the GitHub Actions build by `scripts/train-spam-mode
 
 See [ANDROID_BUILD_GUIDE.md](ANDROID_BUILD_GUIDE.md). The GitHub Action in `.github/workflows/build-android.yml`
 builds a debug APK.
+<img width="1264" height="2640" alt="1000124504" src="https://github.com/user-attachments/assets/27debaaa-584f-4375-adda-96d80429533b" />
+<img width="1264" height="2500" alt="1000124505" src="https://github.com/user-attachments/assets/614db565-c711-482d-8847-68651da05309" />
+<img width="1264" height="2632" alt="1000124506" src="https://github.com/user-attachments/assets/eb6d1b66-bf21-4fcf-b8f3-615da1276790" />
+<img width="1264" height="2624" alt="1000124507" src="https://github.com/user-attachments/assets/a921a55b-b15a-463d-8331-383686abf6bf" />
+
