@@ -47,6 +47,9 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   edgeBlurLevel: 'medium',
   edgeFade: 'medium',
   barStyle: 'solid',
+  glassOpacity: 62,
+  glassBlur: 'strong',
+  glassBorder: true,
   spamProtectionEnabled: true,
   spamSensitivity: 'balanced',
   spamAllow: [],
@@ -316,6 +319,14 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  // Glass bar options reach the stylesheet as variables (see .bar-glass in index.css)
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--glass-alpha', `${settings.glassOpacity ?? 62}%`);
+    root.style.setProperty('--glass-blur', `${{ soft: 10, medium: 18, strong: 28 }[settings.glassBlur ?? 'strong']}px`);
+    root.setAttribute('data-glass-border', settings.glassBorder === false ? '0' : '1');
+  }, [settings.glassOpacity, settings.glassBlur, settings.glassBorder]);
 
   // First screen is ready (your wallpaper colours are applied): let Android remove the launch splash
   useEffect(() => {
