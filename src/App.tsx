@@ -24,13 +24,14 @@ import { smsBridge } from './services/smsBridge.ts';
 
 // Big screens that are not needed to show the inbox are loaded the first time they open
 // (and fetched in the background shortly after launch), which makes the app start faster.
-function lazyScreen<T extends React.ComponentType<any>>(load: () => Promise<{ default: T }>): React.FC<React.ComponentProps<T>> {
-  const Screen = React.lazy(load as any);
-  return (props: React.ComponentProps<T>) => (
+function lazyScreen<T extends React.ComponentType<any>>(load: () => Promise<{ default: T }>): T {
+  const Screen = React.lazy(load);
+  const LazyWrapper = ((props: any) => (
     <React.Suspense fallback={null}>
       <Screen {...props} />
     </React.Suspense>
-  );
+  )) as unknown as T;
+  return LazyWrapper;
 }
 const NewChatModal = lazyScreen(() => import('./components/NewChatModal.tsx').then((m) => ({ default: m.NewChatModal })));
 const SettingsModal = lazyScreen(() => import('./components/SettingsModal.tsx').then((m) => ({ default: m.SettingsModal })));

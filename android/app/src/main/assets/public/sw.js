@@ -92,11 +92,17 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "ping-wordmark.png",
     "revision": "7944e4f24a6078083bd01f8ce482928b"
   }, {
+    "url": "ping-logo-text.png",
+    "revision": "016571ccdf347b207cdd26ec3122d4c0"
+  }, {
+    "url": "ping-logo-dot.png",
+    "revision": "4d7b6ff2f8af1e26742205a0838c65a6"
+  }, {
     "url": "ping-icon.png",
     "revision": "e32a61975d568bda9b2d0959da6aca0a"
   }, {
     "url": "index.html",
-    "revision": "173ffd7fb7af0badf29405b0a85ed732"
+    "revision": "f129146185611f48179b2d62683b5975"
   }, {
     "url": "icon.svg",
     "revision": "f404d3e48a9059ccc0e5bdf6f6543b0a"
@@ -110,25 +116,25 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "assets/motion-C9sNGaBY.js",
     "revision": null
   }, {
-    "url": "assets/index-Dho1h3bU.js",
+    "url": "assets/index-cExqJA8n.js",
     "revision": null
   }, {
-    "url": "assets/index-B-bW58Xo.css",
+    "url": "assets/index-Duq8Z9Zm.css",
     "revision": null
   }, {
-    "url": "assets/SettingsModal-Dzn9Bd4X.js",
+    "url": "assets/SettingsModal-C1eS7E0n.js",
     "revision": null
   }, {
-    "url": "assets/ProfilePhotoEditor-BzdAbRkb.js",
+    "url": "assets/ProfilePhotoEditor-DR68zwc2.js",
     "revision": null
   }, {
-    "url": "assets/PrivacyPolicyModal-BItOjDJn.js",
+    "url": "assets/PrivacyPolicyModal-C3sc4nEx.js",
     "revision": null
   }, {
-    "url": "assets/NewChatModal-BjHQ-kPr.js",
+    "url": "assets/NewChatModal-DLmcMjnV.js",
     "revision": null
   }, {
-    "url": "assets/CreditsModal-BfRgThIm.js",
+    "url": "assets/CreditsModal-NJayMeDr.js",
     "revision": null
   }, {
     "url": "assets/aistudio/IMG_20261020_172005_885679d0.png",
