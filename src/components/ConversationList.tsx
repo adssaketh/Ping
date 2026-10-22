@@ -259,8 +259,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     const delta = top - lastScrollTop.current;
     if (Math.abs(delta) > 10) {
       // moving further down the list collapses the top bar; coming back up (or reaching the top) expands it
-      if (top < 40 || delta < 0) barCollapse.set(false);
-      else if (delta > 0 && top > 80) barCollapse.set(true);
+      if (top < 24 || delta < -6) barCollapse.set(false);
+      else if (delta > 6 && top > 64) barCollapse.set(true);
       setFabHidden(delta > 0 && top > 80);
       lastScrollTop.current = top;
     }

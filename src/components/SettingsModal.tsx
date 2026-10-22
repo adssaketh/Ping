@@ -567,6 +567,67 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   onChange={(v) => updateSettings({ barStyle: v })}
                 />
               </div>
+
+              {settings.barStyle === 'glass' && (
+                <div className="space-y-4 rounded-[24px] bg-m3-surface-hi dark:bg-m3-d3 p-4">
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-m3-on-surface dark:text-white">Glass transparency</p>
+                      <span className="text-xs font-semibold text-m3-primary dark:text-m3-primary-light">
+                        {100 - (settings.glassOpacity ?? 62)}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={5}
+                      max={80}
+                      step={1}
+                      value={100 - (settings.glassOpacity ?? 62)}
+                      onChange={(e) => updateSettings({ glassOpacity: 100 - Number(e.target.value) })}
+                      className="w-full mt-2 accent-m3-primary"
+                      aria-label="Glass transparency"
+                    />
+                    <div className="flex justify-between text-[10px] text-m3-outline dark:text-m3-outline-dk">
+                      <span>Frosted</span>
+                      <span>Clear</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-m3-on-surface dark:text-white mb-2">Glass blur</p>
+                    <ChoiceChips
+                      value={settings.glassBlur ?? 'strong'}
+                      options={[
+                        { id: 'soft', label: 'Soft' },
+                        { id: 'medium', label: 'Medium' },
+                        { id: 'strong', label: 'Strong' },
+                      ]}
+                      onChange={(v) => updateSettings({ glassBlur: v })}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-m3-on-surface dark:text-white">Glass edge</p>
+                      <p className="text-xs text-m3-outline dark:text-m3-outline-dk">A thin light rim around the bars.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ glassBorder: settings.glassBorder === false })}
+                      className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                        settings.glassBorder !== false ? 'bg-m3-primary' : 'bg-m3-variant-dk dark:bg-m3-variant'
+                      }`}
+                      aria-pressed={settings.glassBorder !== false}
+                    >
+                      <div
+                        className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                          settings.glassBorder !== false ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

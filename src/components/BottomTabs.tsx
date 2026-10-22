@@ -34,9 +34,9 @@ export const BottomTabs: React.FC = () => {
         >
           <div className={`pointer-events-auto flex items-stretch justify-between gap-1 max-w-xl mx-auto rounded-[32px] ${
               settings.barStyle === 'glass'
-                ? 'bg-m3-surface-hi/60 dark:bg-m3-d2/60 backdrop-blur-xl'
-                : 'bg-m3-surface-hi dark:bg-m3-d2'
-            } px-2 pt-2 pb-2 shadow-md shadow-black/5 dark:shadow-black/30`}>
+                ? 'bar-glass'
+                : 'bg-m3-surface-hi dark:bg-m3-d2 shadow-md shadow-black/5 dark:shadow-black/30'
+            } px-2 pt-2 pb-2`}>
             {TABS.map((tab) => {
               const active = current === (tab.id as FilterCategory);
               const count = unreadCounts[tab.id];

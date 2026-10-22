@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Search,
@@ -17,12 +17,12 @@ import {
 import { useSMS } from '../context/SMSContext.tsx';
 import { FilterCategory } from '../types.ts';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
-import { spring, springBouncy } from '../motion.ts';
+import { springBouncy } from '../motion.ts';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { useBackHandler } from '../backStack.ts';
 import { smsBridge } from '../services/smsBridge.ts';
-import { barCollapse, useBarCollapsed } from '../utils/barCollapse.ts';
+import { barCollapse } from '../utils/barCollapse.ts';
 
 interface TopSearchBarProps {
   onOpenSimulator?: () => void;
@@ -52,18 +52,29 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Scrolling collapses the bar: the search field becomes an icon at the left, "Ping" moves to the middle and your
-  // picture stays at the right. Searching, typing or an open menu keep it expanded.
-  const scrolledDown = useBarCollapsed();
+  // Scrolling collapses the bar: the search field becomes an icon at the left, the Ping logo moves to the middle and
+  // your picture stays at the right. Searching, typing or an open menu keep it expanded.
+  // All the motion is plain CSS (see .topbar in index.css) switched by a data attribute, so collapsing never
+  // re-renders React while the list is scrolling; that is what keeps it smooth.
   const [searchFocused, setSearchFocused] = useState(false);
-  const collapsed = scrolledDown && !searchFocused && searchQuery.trim() === '' && !menuOpen;
+  const rootRef = useRef<HTMLDivElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [rowWidth, setRowWidth] = useState(360);
+  const holdOpen = useRef(false);
+  holdOpen.current = searchFocused || searchQuery.trim() !== '' || menuOpen;
+  const applyCollapsed = useCallback(() => {
+    const value = barCollapse.get() && !holdOpen.current ? '1' : '0';
+    rootRef.current?.setAttribute('data-collapsed', value);
+    document.documentElement.setAttribute('data-bar-collapsed', value); // the blur strip follows
+  }, []);
+  useEffect(() => barCollapse.subscribe(applyCollapsed), [applyCollapsed]);
+  useEffect(() => {
+    applyCollapsed();
+  }, [searchFocused, searchQuery, menuOpen, applyCollapsed]);
   useLayoutEffect(() => {
     const el = rowRef.current;
     if (!el) return;
-    const measure = () => setRowWidth(el.clientWidth);
+    const measure = () => rootRef.current?.style.setProperty('--clip-right', `${Math.max(0, el.clientWidth - 48)}px`);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -76,8 +87,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
       smsBridge.showKeyboard();
     }, 170);
   };
-  const EXPANDED_SHAPE = 'inset(-10px -10px -14px -10px round 38px)';
-  const collapsedShape = `inset(4px ${Math.max(0, rowWidth - 48)}px 4px 0px round 24px)`;
   useBackHandler(menuOpen, () => setMenuOpen(false));
 
   const FOLDER_LABELS: Partial<Record<FilterCategory, string>> = {
@@ -110,28 +119,20 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   ];
 
   return (
-    <div className="px-4 pt-3 pb-2 shrink-0 pointer-events-none">
-      <motion.div ref={rowRef} className="relative h-14" animate={{ y: collapsed ? -6 : 0 }} transition={spring}>
+    <div ref={rootRef} data-collapsed="0" className="topbar px-4 pt-3 pb-2 shrink-0 pointer-events-none">
+      <div ref={rowRef} className="topbar-row relative h-14">
         {/* Material 3 Search Bar: a full-width pill that is clipped down to a circle when collapsed */}
-        <motion.div
-          className={`pointer-events-auto absolute inset-0 flex items-center rounded-full ${
-            settings.barStyle === 'glass' ? 'bg-m3-surface-hi/60 dark:bg-m3-d2/60 backdrop-blur-xl' : 'bg-m3-surface-hi dark:bg-m3-d2'
-          } text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition ${settings.barStyle === 'glass' ? '' : 'focus-within:bg-white dark:focus-within:bg-m3-d3'} focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md`}
-          initial={{ opacity: 0, y: -12, clipPath: EXPANDED_SHAPE }}
-          animate={{ opacity: 1, y: 0, clipPath: collapsed ? collapsedShape : EXPANDED_SHAPE }}
-          transition={{ ...spring, opacity: { duration: 0.2 } }}
+        <div
+          className={`topbar-pill pointer-events-auto absolute inset-0 flex items-center rounded-full ${
+            settings.barStyle === 'glass' ? 'bar-glass' : 'bg-m3-surface-hi dark:bg-m3-d2 shadow-sm'
+          } text-m3-on-surface dark:text-m3-on-surface-dk transition-shadow ${settings.barStyle === 'glass' ? '' : 'focus-within:bg-white dark:focus-within:bg-m3-d3'} focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30`}
           onClick={() => {
-            if (collapsed) expandAndFocus();
+            if (rootRef.current?.dataset.collapsed === '1') expandAndFocus();
           }}
         >
           <div className="flex-1 flex items-center pl-[14px] gap-2 min-w-0">
             <Search className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />
-            <motion.div
-              className="flex-1 flex items-center gap-2 min-w-0"
-              animate={{ opacity: collapsed ? 0 : 1 }}
-              transition={{ duration: 0.15 }}
-              style={{ pointerEvents: collapsed ? 'none' : 'auto' }}
-            >
+            <div className="topbar-input flex-1 flex items-center gap-2 min-w-0">
               <input
                 ref={searchInputRef}
                 type="text"
@@ -139,7 +140,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
-                tabIndex={collapsed ? -1 : 0}
                 id="ping-search-input"
                 placeholder="Search in Ping"
                 className="w-full bg-transparent text-sm font-normal text-m3-on-surface dark:text-m3-on-surface-dk placeholder-m3-outline dark:placeholder-m3-outline-dk outline-none truncate"
@@ -160,21 +160,15 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                   </motion.button>
                 )}
               </AnimatePresence>
-            </motion.div>
+            </div>
             <div className="w-12 shrink-0" />
           </div>
-        </motion.div>
+        </div>
 
-        {/* "Ping" slides in to the middle while the bar is collapsed */}
-        <motion.div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
-          aria-hidden="true"
-          initial={false}
-          animate={{ opacity: collapsed ? 1 : 0, x: collapsed ? 0 : -80, scale: collapsed ? 1 : 0.9 }}
-          transition={springBouncy}
-        >
-          <div role="img" aria-label="Ping" className="ping-wordmark" />
-        </motion.div>
+        {/* The Ping logo slides in to the middle while the bar is collapsed */}
+        <div className="topbar-logo absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
+          <div role="img" aria-label="Ping" className="ping-logo" />
+        </div>
 
         {/* Profile picture + menu: stays put at the right while the search field collapses */}
         <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-auto z-10">
@@ -318,7 +312,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
             )}
           </AnimatePresence>
         </div>
-      </motion.div>
+      </div>
 
       {FOLDER_LABELS[filter] && (
         <div className="pt-2 flex pointer-events-auto">
