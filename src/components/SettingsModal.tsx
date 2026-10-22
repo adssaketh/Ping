@@ -4,19 +4,16 @@ import { spring, springBouncy, fadeFast, useIsDesktop } from '../motion.ts';
 import {
   ArrowLeft,
   X,
-  Bell,
   ShieldCheck,
   Smartphone,
   Download,
   Upload,
-  RotateCcw,
   Moon,
   Sun,
   ShieldAlert,
   Check,
   Layers,
   Clock,
-  Sparkles,
   FolderSync,
   RefreshCw,
   CheckCircle2,
@@ -29,7 +26,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
-import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { smsBridge } from '../services/smsBridge.ts';
@@ -68,8 +64,6 @@ function ChoiceChips<T extends string>({
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onOpenSimulator?: () => void;
-  onOpenNotifications?: () => void;
   onOpenPrivacy?: () => void;
   onOpenCredits?: () => void;
 }
@@ -77,8 +71,6 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
-  onOpenSimulator,
-  onOpenNotifications,
   onOpenPrivacy,
   onOpenCredits,
 }) => {
@@ -93,7 +85,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     restoreSmsFromJson,
     pickAndRestoreSms,
     cleanExpiredOtps,
-    resetToDemoData,
     isNativeNotificationEnabled,
     requestNotificationPermission,
     isNativePlatform,
@@ -121,13 +112,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return () => window.clearTimeout(timer);
   }, [isOpen]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [versionClicks, setVersionClicks] = useState(0);
   const [appInfo, setAppInfo] = useState<{ versionName: string; versionCode: number } | null>(null);
   useEffect(() => {
     if (isOpen) smsBridge.getAppInfo().then(setAppInfo);
   }, [isOpen]);
-  const [devOptionsUnlocked, setDevOptionsUnlocked] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
 
   const showToast = (msg: string) => {
@@ -357,7 +345,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     Set as default
                   </button>
                 )}
-                <PWAInstallButton />
               </div>
             </div>
 
@@ -521,37 +508,56 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Bars & scrolling */}
             <div className="space-y-4 pt-3 border-t border-m3-line dark:border-m3-d4">
               <div>
-                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Blur under the bars</p>
+                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Scroll edge effect</p>
                 <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
-                  How much messages blur as they slide under the search bar and bottom bar. Pick Off if scrolling feels slow.
+                  What happens to messages as they slide under the search bar and bottom bar. Fade is clean and light on
+                  the phone; Blur adds a soft blur while they fade.
                 </p>
                 <ChoiceChips
-                  value={settings.edgeBlurLevel ?? (settings.edgeBlur === false ? 'off' : 'medium')}
+                  value={settings.edgeEffect ?? 'fade'}
                   options={[
                     { id: 'off', label: 'Off' },
-                    { id: 'light', label: 'Light' },
-                    { id: 'medium', label: 'Medium' },
-                    { id: 'strong', label: 'Strong' },
+                    { id: 'fade', label: 'Fade' },
+                    { id: 'blur', label: 'Fade + blur' },
                   ]}
-                  onChange={(v) => updateSettings({ edgeBlurLevel: v, edgeBlur: undefined })}
+                  onChange={(v) => updateSettings({ edgeEffect: v })}
                 />
               </div>
 
-              <div>
-                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Fade height</p>
-                <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
-                  How far from the bars messages start to fade away.
-                </p>
-                <ChoiceChips
-                  value={settings.edgeFade ?? 'medium'}
-                  options={[
-                    { id: 'short', label: 'Short' },
-                    { id: 'medium', label: 'Medium' },
-                    { id: 'tall', label: 'Tall' },
-                  ]}
-                  onChange={(v) => updateSettings({ edgeFade: v })}
-                />
-              </div>
+              {settings.edgeEffect === 'blur' && (
+                <div>
+                  <p className="text-sm font-medium text-m3-on-surface dark:text-white">Blur strength</p>
+                  <div className="mt-2.5">
+                    <ChoiceChips
+                      value={settings.edgeBlurLevel === 'off' || !settings.edgeBlurLevel ? 'medium' : settings.edgeBlurLevel}
+                      options={[
+                        { id: 'light', label: 'Light' },
+                        { id: 'medium', label: 'Medium' },
+                        { id: 'strong', label: 'Strong' },
+                      ]}
+                      onChange={(v) => updateSettings({ edgeBlurLevel: v })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {(settings.edgeEffect ?? 'fade') !== 'off' && (
+                <div>
+                  <p className="text-sm font-medium text-m3-on-surface dark:text-white">Fade height</p>
+                  <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
+                    How far from the bars messages start to fade away.
+                  </p>
+                  <ChoiceChips
+                    value={settings.edgeFade ?? 'medium'}
+                    options={[
+                      { id: 'short', label: 'Short' },
+                      { id: 'medium', label: 'Medium' },
+                      { id: 'tall', label: 'Tall' },
+                    ]}
+                    onChange={(v) => updateSettings({ edgeFade: v })}
+                  />
+                </div>
+              )}
 
               <div>
                 <p className="text-sm font-medium text-m3-on-surface dark:text-white">Bar style</p>
@@ -1044,41 +1050,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>Restore SMS</span>
               </button>
 
-              {!showResetConfirm ? (
-                <button
-                  type="button"
-                  onClick={() => setShowResetConfirm(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-red-50 dark:bg-red-950/20 hover:bg-red-100 text-xs font-semibold text-[#BA1A1A] dark:text-[#FFB4AB] rounded-full transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset demo data</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-2 p-1.5 bg-red-50 dark:bg-red-950/30 rounded-2xl">
-                  <span className="text-[11px] text-[#BA1A1A] dark:text-[#FFB4AB] font-medium px-2">
-                    Reset all messages?
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetToDemoData();
-                      setShowResetConfirm(false);
-                      showToast('Demo data restored');
-                    }}
-                    className="px-2.5 py-1 text-xs bg-[#BA1A1A] text-white rounded-lg hover:bg-[#93000A] font-semibold"
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowResetConfirm(false)}
-                    className="px-2.5 py-1 text-xs text-m3-variant dark:text-m3-variant-dk hover:bg-black/5 rounded-lg"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              )}
-
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1089,56 +1060,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Hidden Developer & Testing Options (Revealed by tapping version 5 times) */}
-          {devOptionsUnlocked && (
-            <div className="p-4 rounded-3xl bg-m3-surface-hi dark:bg-m3-d2 border border-m3-primary/30 shadow-xs space-y-3 animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-m3-primary" />
-                  <span className="text-xs font-bold text-m3-on-surface dark:text-white uppercase tracking-wider">
-                    Developer & Testing Options
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDevOptionsUnlocked(false)}
-                  className="text-[11px] text-m3-outline hover:text-m3-on-surface dark:hover:text-white"
-                >
-                  Hide
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 pt-1">
-                {onOpenSimulator && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenSimulator();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-m3-primary text-white text-xs font-medium rounded-full shadow-xs"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Simulate Incoming OTP</span>
-                  </button>
-                )}
-
-                {onOpenNotifications && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onOpenNotifications();
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-m3-d3 text-m3-primary dark:text-m3-primary-light text-xs font-medium rounded-full shadow-xs border border-m3-line dark:border-m3-d4"
-                  >
-                    <Bell className="w-3.5 h-3.5" />
-                    <span>Notification Shade</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
 
             </>
           ) : (
@@ -1189,19 +1110,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="text-center py-2 text-xs text-m3-outline dark:text-m3-outline-dk space-y-1">
             <p className="font-semibold text-m3-on-surface dark:text-white">Ping - SMS Edition</p>
             <p className="text-[11px]">Open source · github.com/adssaketh/Ping</p>
-            <p
-              onClick={() => {
-                const next = versionClicks + 1;
-                setVersionClicks(next);
-                if (next >= 5) {
-                  setDevOptionsUnlocked((prev) => !prev);
-                  showToast(!devOptionsUnlocked ? 'Developer options unlocked!' : 'Developer options hidden');
-                  setVersionClicks(0);
-                }
-              }}
-              className="text-[11px] cursor-pointer select-none hover:text-m3-on-surface dark:hover:text-m3-on-surface-dk transition-colors"
-              title="Version build"
-            >
+            <p className="text-[11px]">
               {appInfo ? `Version ${appInfo.versionName} (build ${appInfo.versionCode})` : 'Version 1.0'} · Material You Design 3
             </p>
           </div>

@@ -1,6 +1,0 @@
-{
-  "name": "Google Messages - SMS",
-  "description": "A clean, minimal standard SMS text messaging app crafted with Material Design 3 guidelines.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

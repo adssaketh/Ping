@@ -92,7 +92,9 @@ export interface SmsAppSettings {
   profileName: string;
   /** Years of older messages you loaded with "Show more" (they are loaded again on every launch) */
   loadedYears: number[];
-  /** How much messages blur as they slide under the search bar and bottom bar */
+  /** What happens to messages as they slide under the search bar and bottom bar: nothing, a clean fade, or fade + blur */
+  edgeEffect: 'off' | 'fade' | 'blur';
+  /** How strongly messages blur there (only used when edgeEffect is 'blur') */
   edgeBlurLevel: 'off' | 'light' | 'medium' | 'strong';
   /** How tall the fade zone under the search bar / above the bottom bar is */
   edgeFade: 'short' | 'medium' | 'tall';
@@ -104,8 +106,6 @@ export interface SmsAppSettings {
   glassBlur: 'soft' | 'medium' | 'strong';
   /** Glass bars: a thin light edge, like the rim of real glass */
   glassBorder: boolean;
-  /** Older versions only had an on/off switch; still understood */
-  edgeBlur?: boolean;
   spamProtectionEnabled: boolean;
   /** How aggressively unknown senders are filtered into the Spam folder */
   spamSensitivity: 'relaxed' | 'balanced' | 'strict';
@@ -115,11 +115,9 @@ export interface SmsAppSettings {
   spamBlock: string[];
   /** Small per-word score adjustments learned from the user's Not spam / Report spam taps (on this phone only) */
   spamLearned: Record<string, number>;
-  autoReplyEnabled: boolean;
   emergencyAlerts: boolean;
 
   // Display & UI
   showCategoriesTabs: boolean;
   themeMode: 'system' | 'light' | 'dark';
-  phoneFrameMode: boolean;
 }

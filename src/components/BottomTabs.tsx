@@ -27,7 +27,7 @@ export const BottomTabs: React.FC = () => {
         <motion.nav
           key="bottom-tabs"
           aria-label="Message categories"
-          className="shrink-0 px-3 pt-1 pb-2 pointer-events-none"
+          className="shrink-0 px-3 pt-1 pb-1.5 pointer-events-none"
           initial={{ y: 90, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={spring}
@@ -36,7 +36,7 @@ export const BottomTabs: React.FC = () => {
               settings.barStyle === 'glass'
                 ? 'bar-glass'
                 : 'bg-m3-surface-hi dark:bg-m3-d2 shadow-md shadow-black/5 dark:shadow-black/30'
-            } px-2 pt-2 pb-2`}>
+            } px-1.5 pt-1.5 pb-1.5`}>
             {TABS.map((tab) => {
               const active = current === (tab.id as FilterCategory);
               const count = unreadCounts[tab.id];
@@ -48,7 +48,7 @@ export const BottomTabs: React.FC = () => {
                   onClick={() => setFilter(tab.id)}
                   aria-current={active ? 'page' : undefined}
                   aria-label={count > 0 ? `${tab.label}, ${count} unread` : tab.label}
-                  className="flex-1 min-w-0 flex flex-col items-center gap-1 py-1 rounded-2xl"
+                  className="flex-1 min-w-0 flex flex-col items-center gap-0.5 py-0.5 rounded-2xl"
                 >
                   <span className="relative flex items-center justify-center w-14 h-8 rounded-full">
                     {active && (

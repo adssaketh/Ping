@@ -1,48 +1,39 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useSMS } from '../context/SMSContext.tsx';
 
-interface FadeEdgeProps {
+interface BlurStripProps {
   edge: 'top' | 'bottom';
-  /** height of the bar this strip sits behind */
-  bar: number;
-  /** how far past the bar the fade reaches */
-  fade: number;
+  /** messages are fully hidden up to here (px from the screen edge) */
+  hide: number;
+  /** ...and fully visible again from here */
+  full: number;
   blurPx: number;
 }
 
 /**
- * Where messages disappear under a bar. Right behind the bar they are fully covered (so nothing smudges through
- * it), and just past the bar they come back gradually: two blur layers (soft, then strong nearer the bar) and a
- * tint that eases out, so there is never a visible edge.
+ * The blur part of "Fade + blur". It only sits inside the zone where messages are fading out, and it is strongest
+ * next to the bar and gone by the time the messages are fully visible (two layers: soft, then strong).
  */
-const FadeEdge: React.FC<FadeEdgeProps> = ({ edge, bar, fade, blurPx }) => {
+const BlurStrip: React.FC<BlurStripProps> = ({ edge, hide, full, blurPx }) => {
   const toward = edge === 'top' ? 'to bottom' : 'to top';
-  const total = bar + fade;
-  const at = (k: number) => `${(((bar + fade * k) / total) * 100).toFixed(1)}%`;
-  const mix = (p: number) => `color-mix(in oklab, var(--fade-base) ${p}%, transparent)`;
-  const tint = `linear-gradient(${toward}, ${mix(97)} 0%, ${mix(97)} ${at(0)}, ${mix(86)} ${at(0.18)}, ${mix(62)} ${at(0.38)}, ${mix(34)} ${at(0.6)}, ${mix(12)} ${at(0.82)}, transparent 100%)`;
-  const maskStrong = `linear-gradient(${toward}, black 0%, black ${at(0.05)}, transparent ${at(0.55)})`;
-  const maskSoft = `linear-gradient(${toward}, black 0%, black ${at(0.3)}, transparent 100%)`;
-  const soft = Math.max(2, Math.round(blurPx * 0.45));
+  const span = Math.max(1, full - hide);
+  const strong = `linear-gradient(${toward}, black 0, black ${hide}px, transparent ${hide + span * 0.7}px)`;
+  const soft = `linear-gradient(${toward}, black 0, black ${hide + span * 0.15}px, transparent ${full}px)`;
+  const softPx = Math.max(2, Math.round(blurPx * 0.45));
+  const layer = (px: number, mask: string): React.CSSProperties => ({
+    backdropFilter: `blur(${px}px)`,
+    WebkitBackdropFilter: `blur(${px}px)`,
+    maskImage: mask,
+    WebkitMaskImage: mask,
+  });
   return (
     <div
       aria-hidden="true"
       className={`absolute inset-x-0 z-10 pointer-events-none ${edge === 'top' ? 'top-0 fade-top' : 'bottom-0'}`}
-      style={{ height: total }}
+      style={{ height: full + (edge === 'top' ? 16 : 0) }}
     >
-      {blurPx > 0 && (
-        <>
-          <div
-            className="absolute inset-0"
-            style={{ backdropFilter: `blur(${soft}px)`, WebkitBackdropFilter: `blur(${soft}px)`, maskImage: maskSoft, WebkitMaskImage: maskSoft }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{ backdropFilter: `blur(${blurPx}px)`, WebkitBackdropFilter: `blur(${blurPx}px)`, maskImage: maskStrong, WebkitMaskImage: maskStrong }}
-          />
-        </>
-      )}
-      <div className="absolute inset-0" style={{ background: tint }} />
+      <div className="absolute inset-0" style={layer(softPx, soft)} />
+      <div className="absolute inset-0" style={layer(blurPx, strong)} />
     </div>
   );
 };
@@ -55,13 +46,14 @@ interface InboxColumnProps {
 
 /**
  * The search bar and the bottom bar float over the list instead of sitting beside it, so messages scroll
- * underneath them. The list learns how tall the bars are through --bar-top / --bar-bottom.
+ * underneath them. The list learns how tall the bars are through --bar-top / --bar-bottom, and fades its own
+ * edges with a mask (.edge-mask in index.css) so messages vanish cleanly whatever colour they are.
  */
 export const InboxColumn: React.FC<InboxColumnProps> = ({ top, list, bottom }) => {
   const { settings } = useSMS();
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const [heights, setHeights] = useState({ top: 76, bottom: 84 });
+  const [heights, setHeights] = useState({ top: 68, bottom: 76 });
 
   useLayoutEffect(() => {
     const measure = () =>
@@ -77,25 +69,43 @@ export const InboxColumn: React.FC<InboxColumnProps> = ({ top, list, bottom }) =
     return () => observer.disconnect();
   }, []);
 
-  // blur: Off / Light / Medium / Strong. Older saved settings only had an on/off switch.
-  const level = settings.edgeBlurLevel ?? (settings.edgeBlur === false ? 'off' : 'medium');
-  const blurPx = { off: 0, light: 6, medium: 10, strong: 16 }[level];
-  const fadeExtra = { short: 14, medium: 28, tall: 52 }[settings.edgeFade ?? 'medium'];
+  const effect = settings.edgeEffect ?? 'fade';
+  const glass = settings.barStyle === 'glass';
+  const fadeExtra = { short: 12, medium: 24, tall: 44 }[settings.edgeFade ?? 'medium'];
+  const blurPx = { off: 10, light: 6, medium: 10, strong: 16 }[settings.edgeBlurLevel ?? 'medium'];
+
+  // Solid bars hide what is behind them, so messages are gone by the middle of the bar and are back in full a bit
+  // below it. Glass bars show messages through them, so the fade starts at the very edge of the screen.
+  const topHide = glass ? 0 : Math.round(heights.top * 0.5);
+  const topFull = glass ? Math.round(heights.top * 0.8 + fadeExtra * 0.6) : heights.top + fadeExtra;
+  const botHide = glass ? 0 : Math.round(heights.bottom * 0.45);
+  const botFull = glass ? Math.round(heights.bottom * 0.8 + fadeExtra * 0.6) : heights.bottom + fadeExtra;
 
   return (
     <div
+      data-edge={effect}
       className="relative flex-1 min-h-0 h-full overflow-hidden"
-      style={{ '--bar-top': `${heights.top}px`, '--bar-bottom': `${heights.bottom}px` } as React.CSSProperties}
+      style={
+        {
+          '--bar-top': `${heights.top}px`,
+          '--bar-bottom': `${heights.bottom}px`,
+          '--edge-top-hide': `${topHide}px`,
+          '--edge-top-full': `${topFull}px`,
+          '--edge-bot-hide': `${botHide}px`,
+          '--edge-bot-full': `${botFull}px`,
+        } as React.CSSProperties
+      }
     >
       <div className="absolute inset-0 flex flex-col">{list}</div>
 
-      {/* 16px extra: when the bar collapses this strip slides up by that much (CSS, see .fade-top) */}
-      <FadeEdge edge="top" bar={heights.top} fade={fadeExtra + 16} blurPx={blurPx} />
+      {effect === 'blur' && <BlurStrip edge="top" hide={topHide} full={topFull} blurPx={blurPx} />}
       <div ref={topRef} className="absolute top-0 inset-x-0 z-20 pointer-events-none">
         {top}
       </div>
 
-      {heights.bottom > 0 && <FadeEdge edge="bottom" bar={heights.bottom} fade={fadeExtra} blurPx={blurPx} />}
+      {effect === 'blur' && heights.bottom > 0 && (
+        <BlurStrip edge="bottom" hide={botHide} full={botFull} blurPx={blurPx} />
+      )}
       <div ref={bottomRef} className="absolute bottom-0 inset-x-0 z-20 pointer-events-none">
         {bottom}
       </div>

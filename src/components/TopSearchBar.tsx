@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { FilterCategory } from '../types.ts';
-import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { springBouncy } from '../motion.ts';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
@@ -25,8 +24,6 @@ import { smsBridge } from '../services/smsBridge.ts';
 import { barCollapse } from '../utils/barCollapse.ts';
 
 interface TopSearchBarProps {
-  onOpenSimulator?: () => void;
-  onOpenNotifications?: () => void;
   onOpenSettings: () => void;
   onOpenPrivacy?: () => void;
   onOpenCredits?: () => void;
@@ -119,7 +116,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   ];
 
   return (
-    <div ref={rootRef} data-collapsed="0" className="topbar px-4 pt-3 pb-2 shrink-0 pointer-events-none">
+    <div ref={rootRef} data-collapsed="0" className="topbar px-4 pt-2.5 pb-1.5 shrink-0 pointer-events-none">
       <div ref={rowRef} className="topbar-row relative h-14">
         {/* Material 3 Search Bar: a full-width pill that is clipped down to a circle when collapsed */}
         <div
@@ -275,9 +272,6 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                     <Settings className="w-4 h-4 text-m3-variant dark:text-m3-variant-dk" />
                     <span>Settings</span>
                   </button>
-
-                  {/* PWA Install Action if available */}
-                  <PWAInstallButton />
 
                   <button
                     type="button"

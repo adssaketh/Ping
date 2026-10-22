@@ -697,8 +697,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                   ref={slot === 'cur' ? currentPaneRef : undefined}
                   onScroll={slot === 'cur' ? handleScroll : undefined}
                   aria-hidden={slot !== 'cur'}
-                  className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y"
-                  style={{ paddingTop: 'var(--bar-top, 4px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 24px)' }}
+                  className="edge-mask w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y"
+                  style={{ paddingTop: 'calc(var(--bar-top, 4px) + 2px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 14px)' }}
                 >
                   {f && (slot === 'cur' || neighborsOn) ? renderContent(f, slot === 'cur' ? visibleCount : 12) : null}
                 </div>
@@ -708,8 +708,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
         </div>
       ) : (
         <div
-          className="flex-1 overflow-y-auto"
-          style={{ paddingTop: 'var(--bar-top, 4px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 24px)' }}
+          className="edge-mask flex-1 overflow-y-auto"
+          style={{ paddingTop: 'calc(var(--bar-top, 4px) + 2px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 14px)' }}
           onScroll={handleScroll}
         >
           {searching ? (

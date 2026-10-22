@@ -8,7 +8,6 @@ import {
   SmsAppSettings,
   ConversationCategory,
 } from '../types.ts';
-import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES, INITIAL_CONTACTS } from '../utils/seedData.ts';
 import { applyPalette, SystemPalettes } from '../theme/dynamicColor.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
 import { businessKey, isPhoneNumber, phoneKey } from '../utils/phone.ts';
@@ -44,6 +43,7 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   profilePhotoSource: null,
   profileName: '',
   loadedYears: [],
+  edgeEffect: 'fade',
   edgeBlurLevel: 'medium',
   edgeFade: 'medium',
   barStyle: 'solid',
@@ -55,11 +55,9 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   spamAllow: [],
   spamBlock: [],
   spamLearned: {},
-  autoReplyEnabled: true,
   emergencyAlerts: true,
   showCategoriesTabs: true,
   themeMode: 'system',
-  phoneFrameMode: false,
 };
 
 interface SMSContextType {
@@ -71,9 +69,7 @@ interface SMSContextType {
   filter: FilterCategory;
   searchQuery: string;
   isDarkMode: boolean;
-  phoneFrameMode: boolean;
   soundEnabled: boolean;
-  autoReplyEnabled: boolean;
 
   // Native SMS & Device Integration
   isNativePlatform: boolean;
@@ -142,7 +138,6 @@ interface SMSContextType {
 
   toggleDarkMode: () => void;
   setThemeMode: (mode: 'system' | 'light' | 'dark') => void;
-  togglePhoneFrameMode: () => void;
   toggleSound: () => void;
   toggleAutoReply: () => void;
   toggleShowOtpInNotifications: () => void;
@@ -167,8 +162,6 @@ interface SMSContextType {
   markAsRead: (conversationId: string) => void;
   markAsUnread: (conversationId: string) => void;
   startNewConversation: (contactOrNumber: { name?: string; phoneNumber: string; category?: ConversationCategory }) => string;
-  simulateIncomingSms: (conversationId: string, text: string) => void;
-  resetToDemoData: () => void;
   backupSmsToFile: () => Promise<{ ok: boolean; message: string }>;
   restoreSmsFromJson: (jsonData: string) => Promise<{ ok: boolean; message: string }>;
   pickAndRestoreSms: () => Promise<{ ok: boolean; message: string }>;
@@ -369,27 +362,27 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CONVERSATIONS);
-      return saved ? JSON.parse(saved) : isNativeAndroid() ? [] : INITIAL_CONVERSATIONS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return isNativeAndroid() ? [] : INITIAL_CONVERSATIONS;
+      return [];
     }
   });
 
   const [messages, setMessages] = useState<Message[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.MESSAGES);
-      return saved ? JSON.parse(saved) : isNativeAndroid() ? [] : INITIAL_MESSAGES;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return isNativeAndroid() ? [] : INITIAL_MESSAGES;
+      return [];
     }
   });
 
   const [contacts, setContacts] = useState<Contact[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.CONTACTS);
-      return saved ? JSON.parse(saved) : isNativeAndroid() ? [] : INITIAL_CONTACTS;
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return isNativeAndroid() ? [] : INITIAL_CONTACTS;
+      return [];
     }
   });
 
@@ -552,16 +545,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [updateSettings]);
 
-  const togglePhoneFrameMode = () => {
-    updateSettings({ phoneFrameMode: !settings.phoneFrameMode });
-  };
-
   const toggleSound = () => {
     updateSettings({ soundEnabled: !settings.soundEnabled });
-  };
-
-  const toggleAutoReply = () => {
-    updateSettings({ autoReplyEnabled: !settings.autoReplyEnabled });
   };
 
   const toggleShowOtpInNotifications = () => {
@@ -938,8 +923,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             const nativeNotif = new Notification(title, {
               body,
-              icon: '/pwa-192x192.png',
-              badge: '/icon.svg',
+              icon: '/ping-icon.png',
               tag: `sms-${conv.id}`,
             });
 
@@ -1074,66 +1058,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     deliverOutgoing(newMsgId, conversationsRef.current.find((c) => c.id === conversationId), trimmed);
-
-    // Auto reply simulation
-    // Demo-only: never inject fake replies into real conversations on a phone.
-    if (settings.autoReplyEnabled && !isNativePlatform) {
-      setTimeout(() => {
-        const conv = conversationsRef.current.find((c) => c.id === conversationId);
-        if (conv && !conv.isBlocked) {
-          let replyText = 'Thanks for the text! Got it.';
-          const lower = trimmed.toLowerCase();
-
-          if (conv.contactName.includes('Mom')) {
-            if (lower.includes('cake') || lower.includes('dinner')) {
-              replyText = 'You are the best! See you then, love you! ❤️';
-            } else {
-              replyText = 'Thanks sweetie, talk soon!';
-            }
-          } else if (conv.contactName.includes('Chase')) {
-            const randomCode = Math.floor(100000 + Math.random() * 900000);
-            replyText = `Your Chase verification code is ${randomCode}. Valid for 10 minutes. Do not share.`;
-          } else if (conv.category === 'promotions') {
-            replyText = 'Promo Alert: Thank you for your inquiry. Deal active through Sunday!';
-          } else if (conv.contactName.includes('Alex')) {
-            replyText = 'Sounds like a plan! Let me know if anything changes.';
-          } else {
-            replyText = `Got your text: "${trimmed.slice(0, 30)}${trimmed.length > 30 ? '...' : ''}"`;
-          }
-
-          const replyId = `m-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-          const replyTime = Date.now();
-
-          const incomingMsg: Message = {
-            id: replyId,
-            conversationId,
-            sender: 'them',
-            text: replyText,
-            timestamp: replyTime,
-            status: 'delivered',
-          };
-
-          setMessages((prev) => [...prev, incomingMsg]);
-          soundFx.playReceived();
-
-          setConversations((prev) =>
-            prev.map((c) =>
-              c.id === conversationId
-                ? {
-                    ...c,
-                    lastMessageText: replyText,
-                    lastMessageTimestamp: replyTime,
-                    unreadCount: activeConversationId === conversationId ? 0 : c.unreadCount + 1,
-                  }
-                : c
-            )
-          );
-
-          dispatchIncomingNotification(conv, replyText);
-        }
-      }, 2200);
-    }
-  }, [settings.autoReplyEnabled, isNativePlatform, activeConversationId, dispatchIncomingNotification, deliverOutgoing]);
+  }, [deliverOutgoing]);
 
   const scheduleMessage = useCallback((conversationId: string, text: string, scheduledFor: number) => {
     if (!text.trim()) return;
@@ -1274,52 +1199,6 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [conversations, contacts]
   );
-
-  const simulateIncomingSms = useCallback((conversationId: string, text: string) => {
-    if (!text.trim()) return;
-    const now = Date.now();
-    const newMsg: Message = {
-      id: `m-sim-${now}`,
-      conversationId,
-      sender: 'them',
-      text: text.trim(),
-      timestamp: now,
-      status: 'delivered',
-    };
-
-    setMessages((prev) => [...prev, newMsg]);
-    soundFx.playReceived();
-
-    const conv = conversations.find((c) => c.id === conversationId);
-
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === conversationId
-          ? {
-              ...c,
-              lastMessageText: text.trim(),
-              lastMessageTimestamp: now,
-              unreadCount: activeConversationId === conversationId ? 0 : c.unreadCount + 1,
-            }
-          : c
-      )
-    );
-
-    if (conv) {
-      dispatchIncomingNotification(conv, text.trim());
-    }
-  }, [activeConversationId, conversations, dispatchIncomingNotification]);
-
-  const resetToDemoData = useCallback(() => {
-    setConversations(INITIAL_CONVERSATIONS);
-    setMessages(INITIAL_MESSAGES);
-    setContacts(INITIAL_CONTACTS);
-    setActiveConversationId(null);
-    setFilter('all');
-    setSearchQuery('');
-    setActiveBanner(null);
-    setNotifications([]);
-  }, []);
 
   // ---------------------------------------------------------------
   // Backup & restore (to a file the user chooses)
@@ -1972,9 +1851,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     filter,
     searchQuery,
     isDarkMode,
-    phoneFrameMode: settings.phoneFrameMode,
     soundEnabled: settings.soundEnabled,
-    autoReplyEnabled: settings.autoReplyEnabled,
     settings,
     updateSettings,
     categoryCounts,
@@ -2019,9 +1896,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     toggleDarkMode,
     setThemeMode,
-    togglePhoneFrameMode,
     toggleSound,
-    toggleAutoReply,
     toggleShowOtpInNotifications,
     dismissBanner,
     copyOtpFromNotification,
@@ -2043,8 +1918,6 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markAsRead,
     markAsUnread,
     startNewConversation,
-    simulateIncomingSms,
-    resetToDemoData,
     backupSmsToFile,
     restoreSmsFromJson,
     pickAndRestoreSms,

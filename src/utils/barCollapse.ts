@@ -1,5 +1,3 @@
-import { useSyncExternalStore } from 'react';
-
 /**
  * Whether the top bar is collapsed (search turned into an icon, "Ping" in the middle) because the list is being
  * scrolled. Kept in a tiny store of its own so toggling it never re-renders the whole app.
@@ -21,7 +19,3 @@ export const barCollapse = {
     };
   },
 };
-
-export function useBarCollapsed(): boolean {
-  return useSyncExternalStore(barCollapse.subscribe, barCollapse.get, barCollapse.get);
-}

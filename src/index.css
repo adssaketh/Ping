@@ -10,14 +10,6 @@
  *  them at runtime with tones taken from the phone's wallpaper colours
  *  (see src/theme/dynamicColor.ts), so everything re-tints automatically.
  * ------------------------------------------------------------------ */
-/* Page colour used to fade messages out under the top and bottom bars (follows light / dark / wallpaper colours) */
-:root {
-  --fade-base: var(--c-surface);
-}
-html.dark {
-  --fade-base: var(--c-d0);
-}
-
 :root {
   --c-primary: #0B57D0;
   --c-primary-hover: #0842A0;
@@ -347,4 +339,30 @@ html[data-glass-border='1'] .bar-glass {
 }
 html.dark[data-glass-border='1'] .bar-glass {
   box-shadow: inset 0 0 0 1px color-mix(in oklab, white 16%, transparent), 0 6px 20px rgb(0 0 0 / 0.35);
+}
+
+/* ---- Scroll edge effect: the list fades out under the bars (mask = works on any colour of message) ---- */
+.edge-mask {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--edge-top-hide, 0px),
+    #000 var(--edge-top-full, 0px),
+    #000 calc(100% - var(--edge-bot-full, 0px)),
+    transparent calc(100% - var(--edge-bot-hide, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--edge-top-hide, 0px),
+    #000 var(--edge-top-full, 0px),
+    #000 calc(100% - var(--edge-bot-full, 0px)),
+    transparent calc(100% - var(--edge-bot-hide, 0px)),
+    transparent 100%
+  );
+}
+[data-edge='off'] .edge-mask {
+  -webkit-mask-image: none;
+  mask-image: none;
 }

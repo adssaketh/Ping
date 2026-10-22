@@ -60,7 +60,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     toggleArchiveConversation,
     toggleBlockConversation,
     deleteConversation,
-    simulateIncomingSms,
     isSpamConversation,
     markNotSpam,
     reportSpam,
@@ -820,18 +819,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  simulateIncomingSms(activeConversation.id, `Simulated reply from ${activeConversation.contactName} at ${new Date().toLocaleTimeString()}`);
-                  setInfoModalOpen(false);
-                }}
-                className="flex-1 py-2.5 px-3 text-xs font-semibold bg-m3-primary-container dark:bg-m3-primary-deep text-m3-on-primary-deep dark:text-m3-primary-container rounded-full hover:opacity-90"
-              >
-                Send Test Reply
-              </button>
-              <button
-                type="button"
                 onClick={() => setInfoModalOpen(false)}
-                className="py-2.5 px-5 text-xs font-semibold bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover"
+                className="flex-1 py-2.5 px-5 text-xs font-semibold bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover"
               >
                 Done
               </button>
