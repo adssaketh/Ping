@@ -256,3 +256,20 @@ html.dark {
     transform: translateX(300%);
   }
 }
+
+/* The "ping" lettering taken straight from the app logo, filled with the logo's blue */
+:root {
+  --logo-blue-a: #122fdd;
+  --logo-blue-b: #0084fd;
+}
+html.dark {
+  --logo-blue-a: #7f93ff;
+  --logo-blue-b: #52b6ff;
+}
+.ping-wordmark {
+  height: 27px;
+  aspect-ratio: 404 / 200;
+  background: linear-gradient(90deg, var(--logo-blue-a), var(--logo-blue-b));
+  -webkit-mask: url(/ping-wordmark.png) center / contain no-repeat;
+  mask: url(/ping-wordmark.png) center / contain no-repeat;
+}

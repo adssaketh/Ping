@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   Search,
@@ -21,6 +21,8 @@ import { spring, springBouncy } from '../motion.ts';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { useBackHandler } from '../backStack.ts';
+import { smsBridge } from '../services/smsBridge.ts';
+import { barCollapse, useBarCollapsed } from '../utils/barCollapse.ts';
 
 interface TopSearchBarProps {
   onOpenSimulator?: () => void;
@@ -49,6 +51,33 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   } = useSMS();
 
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Scrolling collapses the bar: the search field becomes an icon at the left, "Ping" moves to the middle and your
+  // picture stays at the right. Searching, typing or an open menu keep it expanded.
+  const scrolledDown = useBarCollapsed();
+  const [searchFocused, setSearchFocused] = useState(false);
+  const collapsed = scrolledDown && !searchFocused && searchQuery.trim() === '' && !menuOpen;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [rowWidth, setRowWidth] = useState(360);
+  useLayoutEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const measure = () => setRowWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const expandAndFocus = () => {
+    barCollapse.set(false);
+    window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      smsBridge.showKeyboard();
+    }, 170);
+  };
+  const EXPANDED_SHAPE = 'inset(-10px -10px -14px -10px round 38px)';
+  const collapsedShape = `inset(4px ${Math.max(0, rowWidth - 48)}px 4px 0px round 24px)`;
   useBackHandler(menuOpen, () => setMenuOpen(false));
 
   const FOLDER_LABELS: Partial<Record<FilterCategory, string>> = {
@@ -82,48 +111,73 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
 
   return (
     <div className="px-4 pt-3 pb-2 shrink-0 pointer-events-none">
-      {/* Material 3 Search Bar */}
-      <motion.div
-        className={`pointer-events-auto relative flex items-center h-14 px-3 rounded-full ${
-          settings.barStyle === 'glass'
-            ? 'bg-m3-surface-hi/60 dark:bg-m3-d2/60 backdrop-blur-xl'
-            : 'bg-m3-surface-hi dark:bg-m3-d2'
-        } text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition ${settings.barStyle === 'glass' ? '' : 'focus-within:bg-white dark:focus-within:bg-m3-d3'} focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md`}
-        initial={{ opacity: 0, y: -12, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={spring}
-      >
+      <motion.div ref={rowRef} className="relative h-14" animate={{ y: collapsed ? -6 : 0 }} transition={spring}>
+        {/* Material 3 Search Bar: a full-width pill that is clipped down to a circle when collapsed */}
+        <motion.div
+          className={`pointer-events-auto absolute inset-0 flex items-center rounded-full ${
+            settings.barStyle === 'glass' ? 'bg-m3-surface-hi/60 dark:bg-m3-d2/60 backdrop-blur-xl' : 'bg-m3-surface-hi dark:bg-m3-d2'
+          } text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition ${settings.barStyle === 'glass' ? '' : 'focus-within:bg-white dark:focus-within:bg-m3-d3'} focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md`}
+          initial={{ opacity: 0, y: -12, clipPath: EXPANDED_SHAPE }}
+          animate={{ opacity: 1, y: 0, clipPath: collapsed ? collapsedShape : EXPANDED_SHAPE }}
+          transition={{ ...spring, opacity: { duration: 0.2 } }}
+          onClick={() => {
+            if (collapsed) expandAndFocus();
+          }}
+        >
+          <div className="flex-1 flex items-center pl-[14px] gap-2 min-w-0">
+            <Search className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />
+            <motion.div
+              className="flex-1 flex items-center gap-2 min-w-0"
+              animate={{ opacity: collapsed ? 0 : 1 }}
+              transition={{ duration: 0.15 }}
+              style={{ pointerEvents: collapsed ? 'none' : 'auto' }}
+            >
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                tabIndex={collapsed ? -1 : 0}
+                id="ping-search-input"
+                placeholder="Search in Ping"
+                className="w-full bg-transparent text-sm font-normal text-m3-on-surface dark:text-m3-on-surface-dk placeholder-m3-outline dark:placeholder-m3-outline-dk outline-none truncate"
+              />
+              <AnimatePresence>
+                {searchQuery && (
+                  <motion.button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="p-1 rounded-full text-m3-outline hover:text-m3-on-surface dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
+                    aria-label="Clear search"
+                    initial={{ opacity: 0, scale: 0.4 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.4 }}
+                    transition={springBouncy}
+                  >
+                    <X className="w-4 h-4" />
+                  </motion.button>
+                )}
+              </AnimatePresence>
+            </motion.div>
+            <div className="w-12 shrink-0" />
+          </div>
+        </motion.div>
 
-        <div className="flex-1 flex items-center ml-3 mr-2 gap-2">
-          <Search className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            id="ping-search-input"
-            placeholder="Search in Ping"
-            className="w-full bg-transparent text-sm font-normal text-m3-on-surface dark:text-m3-on-surface-dk placeholder-m3-outline dark:placeholder-m3-outline-dk outline-none truncate"
-          />
-          <AnimatePresence>
-            {searchQuery && (
-              <motion.button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="p-1 rounded-full text-m3-outline hover:text-m3-on-surface dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
-                aria-label="Clear search"
-                initial={{ opacity: 0, scale: 0.4 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.4 }}
-                transition={springBouncy}
-              >
-                <X className="w-4 h-4" />
-              </motion.button>
-            )}
-          </AnimatePresence>
-        </div>
+        {/* "Ping" slides in to the middle while the bar is collapsed */}
+        <motion.div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          aria-hidden="true"
+          initial={false}
+          animate={{ opacity: collapsed ? 1 : 0, x: collapsed ? 0 : -80, scale: collapsed ? 1 : 0.9 }}
+          transition={springBouncy}
+        >
+          <div role="img" aria-label="Ping" className="ping-wordmark" />
+        </motion.div>
 
-        {/* More menu */}
-        <div className="relative shrink-0">
+        {/* Profile picture + menu: stays put at the right while the search field collapses */}
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-auto z-10">
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}

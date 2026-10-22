@@ -8,6 +8,7 @@ import { SearchResults } from './SearchResults.tsx';
 import { HistorySheet } from './HistorySheet.tsx';
 import { SkeletonList, TopProgress } from './Skeleton.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
+import { barCollapse } from '../utils/barCollapse.ts';
 import { useBackHandler } from '../backStack.ts';
 import type { PressHandlers } from '../utils/useLongPress.ts';
 import {
@@ -257,6 +258,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     const top = e.currentTarget.scrollTop;
     const delta = top - lastScrollTop.current;
     if (Math.abs(delta) > 10) {
+      // moving further down the list collapses the top bar; coming back up (or reaching the top) expands it
+      if (top < 40 || delta < 0) barCollapse.set(false);
+      else if (delta > 0 && top > 80) barCollapse.set(true);
       setFabHidden(delta > 0 && top > 80);
       lastScrollTop.current = top;
     }
@@ -325,6 +329,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     if (currentPaneRef.current) currentPaneRef.current.scrollTop = 0;
     setVisibleCount(40);
     setTabHint(null);
+    barCollapse.set(false);
     const previous = prevPagerIndex.current;
     prevPagerIndex.current = pagerIndex;
     if (swipeCommitted.current) {

@@ -1,5 +1,6 @@
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import { useSMS } from '../context/SMSContext.tsx';
+import { useBarCollapsed } from '../utils/barCollapse.ts';
 
 interface FadeEdgeProps {
   edge: 'top' | 'bottom';
@@ -18,7 +19,7 @@ const FadeEdge: React.FC<FadeEdgeProps> = ({ edge, height, blurPx }) => {
     <div
       aria-hidden="true"
       className={`absolute inset-x-0 z-10 pointer-events-none ${edge === 'top' ? 'top-0' : 'bottom-0'}`}
-      style={{ height }}
+      style={{ height, transition: 'height 320ms var(--ease-emphasized)' }}
     >
       {blurPx > 0 && (
         <div
@@ -51,6 +52,7 @@ interface InboxColumnProps {
  */
 export const InboxColumn: React.FC<InboxColumnProps> = ({ top, list, bottom }) => {
   const { settings } = useSMS();
+  const barCollapsed = useBarCollapsed();
   const topRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [heights, setHeights] = useState({ top: 76, bottom: 84 });
@@ -81,7 +83,12 @@ export const InboxColumn: React.FC<InboxColumnProps> = ({ top, list, bottom }) =
     >
       <div className="absolute inset-0 flex flex-col">{list}</div>
 
-      <FadeEdge edge="top" height={heights.top + fadeExtra} blurPx={blurPx} />
+      {/* A collapsed bar is smaller, so its blur zone is shorter and a little softer too */}
+      <FadeEdge
+        edge="top"
+        height={(barCollapsed ? Math.max(48, heights.top - 16) : heights.top) + fadeExtra * (barCollapsed ? 0.75 : 1)}
+        blurPx={barCollapsed ? Math.round(blurPx * 0.8) : blurPx}
+      />
       <div ref={topRef} className="absolute top-0 inset-x-0 z-20 pointer-events-none">
         {top}
       </div>
