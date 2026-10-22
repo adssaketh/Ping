@@ -17,7 +17,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 /** Material 3 navigation bar at the bottom of the screen: easy to reach with your thumb. */
 export const BottomTabs: React.FC = () => {
-  const { filter, setFilter, categoryCounts, settings } = useSMS();
+  const { filter, setFilter, unreadCounts, settings } = useSMS();
   const [typing, setTyping] = useState(false);
 
   // Tuck the bar away while the keyboard is up so it does not eat the screen
@@ -53,7 +53,7 @@ export const BottomTabs: React.FC = () => {
           <div className="flex items-stretch justify-between gap-1 max-w-xl mx-auto">
             {TABS.map((tab) => {
               const active = filter === (tab.id as FilterCategory);
-              const count = categoryCounts[tab.id];
+              const count = unreadCounts[tab.id];
               const Icon = tab.icon;
               return (
                 <button
@@ -61,6 +61,7 @@ export const BottomTabs: React.FC = () => {
                   type="button"
                   onClick={() => setFilter(tab.id)}
                   aria-current={active ? 'page' : undefined}
+                  aria-label={count > 0 ? `${tab.label}, ${count} unread` : tab.label}
                   className="flex-1 min-w-0 flex flex-col items-center gap-1 py-1 rounded-2xl"
                 >
                   <span className="relative flex items-center justify-center w-14 h-8 rounded-full">

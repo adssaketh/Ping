@@ -81,6 +81,7 @@
   }
 
   body {
+    touch-action: manipulation;
     font-family: 'Google Sans', 'Google Sans Text', 'Roboto Flex', Roboto, system-ui, -apple-system,
       'Segoe UI', sans-serif;
     user-select: none;
@@ -172,5 +173,26 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Conversation rows: cheap press feedback and a first-paint entrance without any JavaScript animation */
+.row-press {
+  transition: transform 130ms var(--ease-emphasized), background-color 200ms var(--ease-emphasized);
+}
+.row-press:active {
+  transform: scale(0.985);
+}
+.row-enter {
+  animation: row-in 380ms var(--ease-emphasized-decelerate) both;
+}
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
   }
 }

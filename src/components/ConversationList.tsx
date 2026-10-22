@@ -65,18 +65,15 @@ const ConversationRow = React.memo(function ConversationRow({
   const initials = getInitials(conv.contactName, conv.phoneNumber);
 
   return (
-      <motion.div
+      <div
         key={conv.id}
         onClick={() => {
           if (consumeClick()) return;
           onOpen(conv.id);
         }}
         {...bindPress(conv.id)}
-        initial={!introDone && index < 14 ? { opacity: 0, y: 16 } : false}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ ...spring, delay: Math.min(index, 10) * 0.03 }}
-        whileTap={{ scale: 0.98 }}
-        className={`row-cv group relative flex items-center px-4 py-3.5 gap-3.5 cursor-pointer transition-colors duration-200 rounded-[28px] mx-2 ${
+        style={!introDone && index < 14 ? { animationDelay: `${Math.min(index, 10) * 30}ms` } : undefined}
+        className={`row-press ${!introDone && index < 14 ? 'row-enter' : ''} row-cv group relative flex items-center px-4 py-3.5 gap-3.5 cursor-pointer transition-colors duration-200 rounded-[28px] mx-2 ${
           isSelected
             ? 'bg-m3-primary-container/60 dark:bg-m3-primary-deep/40 text-m3-on-primary-deep dark:text-m3-primary-container'
             : hasUnread
@@ -197,7 +194,7 @@ const ConversationRow = React.memo(function ConversationRow({
             {hasUnread ? <CheckCheck className="w-4 h-4" /> : <Mail className="w-4 h-4" />}
           </button>
         </div>
-      </motion.div>
+      </div>
   );
 });
 
@@ -273,6 +270,12 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   const pagerRef = useRef<HTMLDivElement>(null);
   const currentPaneRef = useRef<HTMLDivElement>(null);
   const [pageWidth, setPageWidth] = useState(0);
+  const [neighborsOn, setNeighborsOn] = useState(false);
+  useEffect(() => {
+    if (!neighborsOn) return;
+    const timer = setTimeout(() => setNeighborsOn(false), 2500);
+    return () => clearTimeout(timer);
+  }, [neighborsOn, filter]);
   const x = useMotionValue(0);
   const swipeCommitted = useRef(false);
   const prevPagerIndex = useRef(pagerIndex);
@@ -617,6 +620,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
             dragElastic={0.08}
             dragConstraints={{ left: -pageWidth, right: pageWidth }}
             onDragEnd={handlePagerDragEnd}
+            onPointerDown={() => setNeighborsOn(true)}
           >
             {(['prev', 'cur', 'next'] as const).map((slot) => {
               const idx = pagerIndex + (slot === 'prev' ? -1 : slot === 'next' ? 1 : 0);
@@ -629,7 +633,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                   aria-hidden={slot !== 'cur'}
                   className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y pb-28 pt-1"
                 >
-                  {f ? renderContent(f, slot === 'cur' ? visibleCount : 12) : null}
+                  {f && (slot === 'cur' || neighborsOn) ? renderContent(f, slot === 'cur' ? visibleCount : 12) : null}
                 </div>
               );
             })}

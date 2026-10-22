@@ -96,6 +96,7 @@ interface SMSContextType {
   };
   // Spam protection
   spamConversationIds: Set<string>;
+  unreadCounts: { all: number; personal: number; transactions: number; services: number; promotions: number };
   isSpamConversation: (conversationId: string) => boolean;
   markNotSpam: (conversationId: string) => void;
   reportSpam: (conversationId: string) => void;
@@ -684,6 +685,20 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settings.spamBlock,
     settings.spamLearned,
   ]);
+
+  // Unread conversations per tab (what the little badges on the bottom tabs show)
+  const unreadCounts = useMemo(() => {
+    const active = conversations.filter(
+      (c) => !c.isArchived && !c.isBlocked && !spamConversationIds.has(c.id) && c.unreadCount > 0
+    );
+    return {
+      all: active.length,
+      personal: active.filter((c) => c.category === 'personal').length,
+      transactions: active.filter((c) => c.category === 'transactions').length,
+      services: active.filter((c) => c.category === 'services').length,
+      promotions: active.filter((c) => c.category === 'promotions').length,
+    };
+  }, [conversations, spamConversationIds]);
 
   // Category counts
   const categoryCounts = useMemo(() => {
@@ -1666,6 +1681,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateSettings,
     categoryCounts,
     spamConversationIds,
+    unreadCounts,
     isSpamConversation,
     markNotSpam,
     reportSpam,
