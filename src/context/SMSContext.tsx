@@ -43,6 +43,7 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   profilePhoto: null,
   profilePhotoSource: null,
   profileName: '',
+  loadFullHistory: false,
   spamProtectionEnabled: true,
   spamSensitivity: 'balanced',
   spamAllow: [],
@@ -78,7 +79,7 @@ interface SMSContextType {
   checkDefaultSmsApp: () => Promise<void>;
   requestDefaultSmsApp: () => Promise<boolean>;
   requestPermissions: () => Promise<void>;
-  syncDeviceSmsAndContacts: () => Promise<{ smsCount: number; contactCount: number }>;
+  syncDeviceSmsAndContacts: (opts?: { full?: boolean }) => Promise<{ smsCount: number; contactCount: number }>;
   syncDeviceContacts: () => Promise<number>;
   importWebContact: () => Promise<Contact | null>;
   
@@ -103,7 +104,17 @@ interface SMSContextType {
   isContactNumber: (number: string) => boolean;
   /** Opens the contacts app to save this number, then refreshes names in Ping */
   addNumberToContacts: (number: string, name?: string) => Promise<boolean>;
+  /** Tab the bottom bar should highlight while a swipe is finishing (null = follow the real tab) */
+  tabHint: FilterCategory | null;
+  setTabHint: (tab: FilterCategory | null) => void;
   spamConversationIds: Set<string>;
+  /** Message to scroll to (and flash) when a chat opens from a search result */
+  jumpToMessageId: string | null;
+  /** true once every message on the phone has been loaded */
+  historyLoaded: boolean;
+  isLoadingHistory: boolean;
+  loadFullHistory: () => Promise<void>;
+  setJumpToMessageId: (id: string | null) => void;
   unreadCounts: { all: number; personal: number; transactions: number; services: number; promotions: number };
   isSpamConversation: (conversationId: string) => boolean;
   markNotSpam: (conversationId: string) => void;
@@ -162,14 +173,14 @@ const STORAGE_KEYS = {
 };
 
 /** Writes `value` to localStorage 400ms after it last changed, and immediately when the app is hidden. */
-function useDebouncedPersist(key: string, value: unknown, delayMs = 400) {
+function useDebouncedPersist(key: string, value: unknown, delayMs = 400, transform?: (v: any) => unknown) {
   const latest = useRef(value);
   latest.current = value;
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        localStorage.setItem(key, JSON.stringify(latest.current));
+        localStorage.setItem(key, JSON.stringify(transform ? transform(latest.current) : latest.current));
       } catch {
         /* storage full or unavailable */
       }
@@ -180,7 +191,7 @@ function useDebouncedPersist(key: string, value: unknown, delayMs = 400) {
   useEffect(() => {
     const flush = () => {
       try {
-        localStorage.setItem(key, JSON.stringify(latest.current));
+        localStorage.setItem(key, JSON.stringify(transform ? transform(latest.current) : latest.current));
       } catch {
         /* storage full or unavailable */
       }
@@ -198,6 +209,22 @@ function useDebouncedPersist(key: string, value: unknown, delayMs = 400) {
 }
 
 const DEVICE_ID_PREFIX = 'm-dev-';
+
+/**
+ * What is kept in the app's small local storage: your own / unsent messages, starred messages and the newest
+ * 1500 messages from the phone (so the inbox opens instantly). The full history is read from the phone's SMS
+ * store again after launch, so thousands of old messages never have to be copied into local storage.
+ */
+function messagesForStorage(all: Message[]): Message[] {
+  const keep: Message[] = [];
+  const device: Message[] = [];
+  for (const m of all) {
+    if (!m.id.startsWith(DEVICE_ID_PREFIX) || m.isStarred) keep.push(m);
+    else device.push(m);
+  }
+  device.sort((a, b) => b.timestamp - a.timestamp);
+  return keep.concat(device.slice(0, 1500));
+}
 
 /** Turns a contact read from the phone into Ping's contact (one entry per number). */
 function contactFromDevice(dc: NativeContact): Contact {
@@ -258,12 +285,14 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Material You: follow the phone's wallpaper colours (Android 12+), refreshed whenever the app is reopened
   const [systemPalette, setSystemPalette] = useState<SystemPalettes | null>(null);
+  const [paletteLoaded, setPaletteLoaded] = useState(false);
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       const palette = await smsBridge.getSystemColors();
       if (cancelled) return;
       setSystemPalette((prev) => (JSON.stringify(prev) === JSON.stringify(palette) ? prev : palette));
+      setPaletteLoaded(true);
     };
     load();
     const onVisible = () => {
@@ -275,6 +304,13 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, []);
+
+  // First screen is ready (your wallpaper colours are applied): let Android remove the launch splash
+  useEffect(() => {
+    if (!paletteLoaded) return;
+    const timer = window.setTimeout(() => smsBridge.appReady(), 60);
+    return () => window.clearTimeout(timer);
+  }, [paletteLoaded]);
 
   // Apply the colours, then tell Android which colour to paint behind the status / navigation bars
   useEffect(() => {
@@ -335,12 +371,20 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [tabHint, setTabHint] = useState<FilterCategory | null>(null);
+  const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [filter, setFilter] = useState<FilterCategory>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const conversationsRef = useRef<Conversation[]>(conversations);
   conversationsRef.current = conversations;
   const messagesRef = useRef<Message[]>(messages);
   messagesRef.current = messages;
+  const rawCacheForDelete = useRef<Map<string, NativeSmsMessage> | null>(null);
+  const forgetRaw = (m: Message) => {
+    if (m.id.startsWith(DEVICE_ID_PREFIX)) rawCacheForDelete.current?.delete(m.id.slice(DEVICE_ID_PREFIX.length));
+  };
   const dispatchedScheduledRef = useRef<Set<string>>(new Set());
   const [activeBanner, setActiveBanner] = useState<SmsNotificationItem | null>(null);
   const [notifications, setNotifications] = useState<SmsNotificationItem[]>([]);
@@ -370,7 +414,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Save data to localStorage (a moment after the last change, so taps are never blocked by big writes)
   useDebouncedPersist(STORAGE_KEYS.CONVERSATIONS, conversations);
-  useDebouncedPersist(STORAGE_KEYS.MESSAGES, messages);
+  useDebouncedPersist(STORAGE_KEYS.MESSAGES, messages, 400, messagesForStorage);
   useDebouncedPersist(STORAGE_KEYS.CONTACTS, contacts);
 
   // Auto-dismiss banner after 8s
@@ -1099,7 +1143,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMessage = useCallback((messageId: string) => {
     const target = messagesRef.current.find((m) => m.id === messageId);
-    if (target) deleteFromDevice(target);
+    if (target) {
+      deleteFromDevice(target);
+      forgetRaw(target);
+    }
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
   }, []);
 
@@ -1122,7 +1169,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deleteConversation = useCallback((conversationId: string) => {
-    messagesRef.current.filter((m) => m.conversationId === conversationId).forEach(deleteFromDevice);
+    messagesRef.current
+      .filter((m) => m.conversationId === conversationId)
+      .forEach((m) => {
+        deleteFromDevice(m);
+        forgetRaw(m);
+      });
     setConversations((prev) => prev.filter((c) => c.id !== conversationId));
     setMessages((prev) => prev.filter((m) => m.conversationId !== conversationId));
     if (activeConversationId === conversationId) {
@@ -1330,7 +1382,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const expired = messagesRef.current.filter((m) => !!extractOtpCode(m.text) && m.timestamp < oneDayAgo);
     if (expired.length === 0) return 0;
     const ids = new Set(expired.map((m) => m.id));
-    expired.forEach(deleteFromDevice);
+    expired.forEach((m) => {
+      deleteFromDevice(m);
+      forgetRaw(m);
+    });
     setMessages((prev) => prev.filter((m) => !ids.has(m.id)));
     return expired.length;
   }, []);
@@ -1404,6 +1459,9 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // What the last sync looked like, so an unchanged inbox costs nothing
+  const rawCache = useRef<Map<string, NativeSmsMessage>>(new Map());
+  rawCacheForDelete.current = rawCache.current;
+  const fullHistoryLoaded = useRef(false);
   const lastSyncSignature = useRef('');
   const lastContactsSignature = useRef('');
   const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1447,7 +1505,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const syncDeviceSmsAndContacts = useCallback(async () => {
+  const syncDeviceSmsAndContacts = useCallback(async (opts?: { full?: boolean }) => {
     setIsSyncingDevice(true);
     try {
       // 1. Sync contacts first to match names with numbers
@@ -1491,7 +1549,20 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await nextTick();
 
       // 2. Read device SMS messages from Telephony provider
-      const rawSms = await smsBridge.readDeviceSms(1000);
+      // First read: the newest 1000 (fast, so the inbox is up quickly). Then the whole history once, and after
+      // that only the newest messages, merged into what is already known.
+      const wantAll = !!opts?.full;
+      const fresh = await smsBridge.readDeviceSms(wantAll ? 30000 : 1000);
+      if (wantAll) {
+        rawCache.current = new Map(fresh.map((m) => [m.id, m]));
+        rawCacheForDelete.current = rawCache.current;
+        fullHistoryLoaded.current = true;
+        setHistoryLoaded(true);
+      } else {
+        for (const m of fresh) rawCache.current.set(m.id, m);
+        if (fresh.length < 1000) setHistoryLoaded(true); // the whole inbox fit in the first read
+      }
+      const rawSms = Array.from(rawCache.current.values()) as NativeSmsMessage[];
       if (!rawSms || rawSms.length === 0) {
         const result = { smsCount: 0, contactCount: contactList.length };
         setSyncResult(result);
@@ -1663,6 +1734,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Always call the latest handlers without re-subscribing the native listeners each render
   const incomingHandlerRef = useRef(handleIncomingDeviceSms);
   incomingHandlerRef.current = handleIncomingDeviceSms;
+  const loadFullRef = useRef(settings.loadFullHistory);
+  loadFullRef.current = settings.loadFullHistory;
   const syncRef = useRef(syncDeviceSmsAndContacts);
   syncRef.current = syncDeviceSmsAndContacts;
   const isSyncingRef = useRef(false);
@@ -1708,7 +1781,25 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isSyncingRef.current = false;
       }
     };
-    autoSync();
+
+    // The complete history (every older message) is read once, a few seconds after the inbox is up
+    const loadHistory = async () => {
+      if (!loadFullRef.current) return; // only after "Show more" was tapped once
+      if (isSyncingRef.current) {
+        historyTimer = window.setTimeout(loadHistory, 1500);
+        return;
+      }
+      isSyncingRef.current = true;
+      try {
+        const perms = await smsBridge.checkPermissions();
+        if (perms.readSms) await syncRef.current({ full: true });
+      } finally {
+        isSyncingRef.current = false;
+      }
+    };
+    let historyTimer: number | undefined = window.setTimeout(loadHistory, 5000);
+    // The first read of messages and contacts starts after the app is on screen, so opening stays smooth
+    const startupTimer = window.setTimeout(autoSync, 1800);
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
         // The user may have changed the default SMS app / permissions in Android settings meanwhile
@@ -1733,10 +1824,28 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       cancelled = true;
+      window.clearTimeout(startupTimer);
+      window.clearTimeout(historyTimer);
       if (unsubscribeResume) unsubscribeResume();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [isNativePlatform]);
+
+  // "Show more": read every message from the phone (the same way backup does), and keep doing so on later launches
+  const loadFullHistory = useCallback(async () => {
+    if (!isNativePlatform || isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    setIsLoadingHistory(true);
+    try {
+      const perms = await smsBridge.checkPermissions();
+      if (!perms.readSms) return;
+      updateSettings({ loadFullHistory: true });
+      await syncRef.current({ full: true });
+    } finally {
+      isSyncingRef.current = false;
+      setIsLoadingHistory(false);
+    }
+  }, [isNativePlatform, updateSettings]);
 
   // Track real carrier results (sent / delivered / failed) for outgoing SMS
   useEffect(() => {
@@ -1788,6 +1897,13 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     settings,
     updateSettings,
     categoryCounts,
+    tabHint,
+    setTabHint,
+    jumpToMessageId,
+    setJumpToMessageId,
+    historyLoaded,
+    isLoadingHistory,
+    loadFullHistory,
     spamConversationIds,
     getContactPhoto,
     isContactNumber,

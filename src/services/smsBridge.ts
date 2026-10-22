@@ -55,6 +55,7 @@ interface PingSmsPluginInterface {
   setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
   getSystemColors(): Promise<SystemPalettes>;
   setBackEnabled(options: { enabled: boolean }): Promise<void>;
+  appReady(): Promise<void>;
   consumeLaunchShortcut(): Promise<{ target?: string }>;
   addContact(options: { phoneNumber: string; name?: string }): Promise<{ done: boolean }>;
   readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
@@ -276,6 +277,16 @@ export const smsBridge = {
       await PingSms.showKeyboard();
     } catch (err) {
       console.warn('showKeyboard failed:', err);
+    }
+  },
+
+  /** The first screen is drawn: the launch splash can go away. */
+  async appReady(): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.appReady();
+    } catch (err) {
+      console.warn('appReady failed:', err);
     }
   },
 

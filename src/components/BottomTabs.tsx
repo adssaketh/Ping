@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import React from 'react';
+import { motion } from 'motion/react';
 import { CreditCard, MessageSquare, Tag, User, Wrench } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { FilterCategory } from '../types.ts';
@@ -17,42 +17,24 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 
 /** Material 3 navigation bar at the bottom of the screen: easy to reach with your thumb. */
 export const BottomTabs: React.FC = () => {
-  const { filter, setFilter, unreadCounts, settings } = useSMS();
-  const [typing, setTyping] = useState(false);
-
-  // Tuck the bar away while the keyboard is up so it does not eat the screen
-  useEffect(() => {
-    const isField = (t: EventTarget | null) =>
-      t instanceof HTMLElement && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA');
-    const onIn = (e: FocusEvent) => {
-      if (isField(e.target)) setTyping(true);
-    };
-    const onOut = () => setTyping(false);
-    document.addEventListener('focusin', onIn);
-    document.addEventListener('focusout', onOut);
-    return () => {
-      document.removeEventListener('focusin', onIn);
-      document.removeEventListener('focusout', onOut);
-    };
-  }, []);
-
+  const { filter, setFilter, unreadCounts, settings, tabHint } = useSMS();
+  const current = tabHint ?? filter;
   if (!settings.showCategoriesTabs) return null;
 
   return (
-    <AnimatePresence initial={false}>
-      {!typing && (
+    <>
+      {(
         <motion.nav
           key="bottom-tabs"
           aria-label="Message categories"
           className="shrink-0 px-2 pt-2 pb-2 bg-m3-surface-hi dark:bg-m3-d1 border-t border-m3-line/60 dark:border-m3-d4"
           initial={{ y: 90, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 90, opacity: 0 }}
           transition={spring}
         >
           <div className="flex items-stretch justify-between gap-1 max-w-xl mx-auto">
             {TABS.map((tab) => {
-              const active = filter === (tab.id as FilterCategory);
+              const active = current === (tab.id as FilterCategory);
               const count = unreadCounts[tab.id];
               const Icon = tab.icon;
               return (
@@ -100,6 +82,6 @@ export const BottomTabs: React.FC = () => {
           </div>
         </motion.nav>
       )}
-    </AnimatePresence>
+    </>
   );
 };

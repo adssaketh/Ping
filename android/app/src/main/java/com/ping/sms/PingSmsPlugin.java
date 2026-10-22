@@ -251,6 +251,16 @@ public class PingSmsPlugin extends Plugin {
         call.resolve();
     }
 
+    /** The web app has drawn its first screen: the launch splash can hand over. */
+    @PluginMethod
+    public void appReady(PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity instanceof MainActivity) {
+            activity.runOnUiThread(() -> ((MainActivity) activity).markWebReady());
+        }
+        call.resolve();
+    }
+
     /** Sends Ping to the background (like pressing back on the home screen). */
     @PluginMethod
     public void exitApp(PluginCall call) {

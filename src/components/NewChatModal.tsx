@@ -1,11 +1,12 @@
-import React, { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { spring, springBouncy, fadeFast } from '../motion.ts';
+import { spring, springBouncy, fadeFast, useIsDesktop } from '../motion.ts';
 import { Search, X, UserPlus, Phone, ArrowRight, RefreshCw } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { getInitials } from '../utils/smsUtils.ts';
 import { searchContacts } from '../utils/contactSearch.ts';
 import { AvatarCircle } from './AvatarCircle.tsx';
+import { smsBridge } from '../services/smsBridge.ts';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -13,6 +14,17 @@ interface NewChatModalProps {
 }
 
 export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) => {
+  const isDesktop = useIsDesktop();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  // raise the keyboard once the panel has finished sliding in, so the two never compete for frames
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = window.setTimeout(() => {
+      searchInputRef.current?.focus();
+      smsBridge.showKeyboard();
+    }, 360);
+    return () => window.clearTimeout(timer);
+  }, [isOpen]);
   const {
     contacts,
     startNewConversation,
@@ -51,21 +63,24 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
     <motion.div
       key="overlay"
       className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4"
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={fadeFast}
+      exit={{ opacity: 1 }}
     >
       {/* Backdrop */}
-      <div
+      <motion.div
         className="fixed inset-0 bg-black/40"
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={fadeFast}
       />
 
       {/* Sheet / Modal */}
       <motion.div
         className="will-change-transform relative w-full sm:max-w-md h-full sm:h-auto sm:max-h-[85vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
-        initial={{ opacity: 0, y: 56, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 36, scale: 0.98 }} transition={spring}
+        initial={isDesktop ? { opacity: 0, y: 56, scale: 0.97 } : { y: '100%' }} animate={isDesktop ? { opacity: 1, y: 0, scale: 1 } : { y: 0 }} exit={isDesktop ? { opacity: 0, y: 36, scale: 0.98 } : { y: '100%' }} transition={spring}
       >
         {/* Header */}
         <div className="p-4 flex items-center justify-between border-b border-m3-line dark:border-m3-d4 bg-white dark:bg-m3-d1">
@@ -88,8 +103,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
           <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-full bg-m3-surface-hi dark:bg-m3-d3 text-sm">
             <span className="text-xs font-semibold text-m3-outline dark:text-m3-outline-dk">To:</span>
             <input
+              ref={searchInputRef}
               type="text"
-              autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Type a name or phone number"

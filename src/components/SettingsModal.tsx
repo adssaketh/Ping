@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { spring, springBouncy, fadeFast } from '../motion.ts';
+import { spring, springBouncy, fadeFast, useIsDesktop } from '../motion.ts';
 import {
   ArrowLeft,
   X,
@@ -50,6 +50,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onOpenPrivacy,
   onOpenCredits,
 }) => {
+  const isDesktop = useIsDesktop();
   const {
     settings,
     updateSettings,
@@ -146,21 +147,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <motion.div
       key="overlay"
       className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4"
-      initial={{ opacity: 0 }}
+      initial={{ opacity: 1 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={fadeFast}
+      exit={{ opacity: 1 }}
     >
       {/* Backdrop */}
-      <div
+      <motion.div
         className="fixed inset-0 bg-black/40"
         onClick={onClose}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={fadeFast}
       />
 
       {/* Settings Dialog / Screen */}
       <motion.div
         className="will-change-transform relative w-full max-w-2xl h-full sm:h-[90vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
-        initial={{ opacity: 0, y: 56, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 36, scale: 0.98 }} transition={spring}
+        initial={isDesktop ? { opacity: 0, y: 56, scale: 0.97 } : { y: '100%' }} animate={isDesktop ? { opacity: 1, y: 0, scale: 1 } : { y: 0 }} exit={isDesktop ? { opacity: 0, y: 36, scale: 0.98 } : { y: '100%' }} transition={spring}
       >
         {/* Toast */}
         <AnimatePresence>
@@ -197,7 +201,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10"
+            className="hidden sm:block p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10"
           >
             <X className="w-5 h-5" />
           </button>
@@ -374,7 +378,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={async () => {
-                  const res = await syncDeviceSmsAndContacts();
+                  const res = await syncDeviceSmsAndContacts({ full: true });
                   showToast(`Synced ${res.smsCount} SMS & ${res.contactCount} contacts!`);
                 }}
                 disabled={isSyncingDevice}

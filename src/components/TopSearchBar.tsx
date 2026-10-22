@@ -133,7 +133,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                   style={{ transformOrigin: 'top right' }}
                   initial={{ opacity: 0, scale: 0.85, y: -8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: -6 }}
+                  exit={{ opacity: 0, scale: 0.96, y: -4, transition: { duration: 0.1 } }}
                   transition={springBouncy}
                 >
                   <div className="flex items-center gap-3 px-3 pt-2 pb-3">
@@ -210,7 +210,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
-                      onOpenSettings();
+                      window.setTimeout(() => onOpenSettings(), 110);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl"
                   >
@@ -225,7 +225,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
-                      onOpenPrivacy?.();
+                      window.setTimeout(() => onOpenPrivacy?.(), 110);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl"
                   >
@@ -237,7 +237,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
-                      onOpenCredits?.();
+                      window.setTimeout(() => onOpenCredits?.(), 110);
                     }}
                     className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl"
                   >

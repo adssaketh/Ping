@@ -66,6 +66,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     isContactNumber,
     addNumberToContacts,
     getContactPhoto,
+    jumpToMessageId,
+    setJumpToMessageId,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -103,6 +105,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
   const feedRef = useRef<HTMLDivElement>(null);
   const scrollAnchor = useRef<number | null>(null);
   const didInitialScroll = useRef(false);
+  const useSMSJumpRef = useRef<string | null>(null);
+  useSMSJumpRef.current = jumpToMessageId;
   const shownMessages = useMemo(
     () => (convMessages.length > visibleCount ? convMessages.slice(-visibleCount) : convMessages),
     [convMessages, visibleCount]
@@ -126,10 +130,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     }
   }, [visibleCount]);
 
+  // Opened from a search result: show that message in the middle of the screen and flash it
+  useEffect(() => {
+    if (!jumpToMessageId || !activeConversation) return;
+    const index = convMessages.findIndex((m) => m.id === jumpToMessageId);
+    if (index < 0) return;
+    const fromEnd = convMessages.length - index;
+    if (fromEnd > visibleCount) setVisibleCount(fromEnd + 20);
+    const timer = window.setTimeout(() => {
+      const el = document.getElementById(`msg-${jumpToMessageId}`);
+      if (el) {
+        el.scrollIntoView({ block: 'center' });
+        el.classList.add('ping-flash');
+        window.setTimeout(() => el.classList.remove('ping-flash'), 1700);
+      }
+      setJumpToMessageId(null);
+    }, 450);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpToMessageId, activeConversation?.id]);
+
   // Scroll to the newest message: instantly when a chat opens, smoothly for new messages
   useEffect(() => {
     const firstTime = !didInitialScroll.current;
     didInitialScroll.current = true;
+    if (useSMSJumpRef.current) return;
     messagesEndRef.current?.scrollIntoView({ behavior: firstTime ? 'auto' : 'smooth' });
   }, [convMessages.length, activeConversation?.id]);
 
@@ -490,6 +515,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
           return (
             <motion.div
               key={msg.id}
+              id={`msg-${msg.id}`}
               className="group/msg flex flex-col"
               initial={index >= shownMessages.length - 12 ? { opacity: 0, y: 14, scale: 0.94 } : false}
               animate={{ opacity: 1, y: 0, scale: 1 }}

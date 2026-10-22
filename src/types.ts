@@ -90,6 +90,8 @@ export interface SmsAppSettings {
   /** The larger original used for re-editing the picture (also stored on this phone only) */
   profilePhotoSource: string | null;
   profileName: string;
+  /** Set when you tap "Show more": the full message history is then loaded on every launch */
+  loadFullHistory: boolean;
   spamProtectionEnabled: boolean;
   /** How aggressively unknown senders are filtered into the Spam folder */
   spamSensitivity: 'relaxed' | 'balanced' | 'strict';

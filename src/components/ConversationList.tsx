@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { animate, motion, useMotionValue, PanInfo } from 'motion/react';
 import { spring, springBouncy, springSoft } from '../motion.ts';
 import { LatestMessageCard } from './LatestMessageCard.tsx';
 import { AvatarCircle } from './AvatarCircle.tsx';
 import { ConversationActionSheet } from './ConversationActionSheet.tsx';
+import { SearchResults } from './SearchResults.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
 import type { PressHandlers } from '../utils/useLongPress.ts';
@@ -24,6 +25,8 @@ import {
   X,
   Tag,
   Wrench,
+  History,
+  RefreshCw,
   CreditCard,
   User,
 } from 'lucide-react';
@@ -226,9 +229,14 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     starredMessages,
     messages,
     setFilter,
+    setTabHint,
     settings,
     spamConversationIds,
     getContactPhoto,
+    historyLoaded,
+    isLoadingHistory,
+    loadFullHistory,
+    isNativePlatform,
   } = useSMS();
 
   // The floating button tucks away while you scroll down and returns when you scroll up
@@ -279,7 +287,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
   // ---- Swipe pager (All / Personal / Transactions / Promotions) ----
   const pagerIndex = PAGER_FILTERS.indexOf(filter);
-  const pagerEnabled = settings.showCategoriesTabs && pagerIndex >= 0;
+  const deferredQuery = useDeferredValue(searchQuery);
+  const searching = deferredQuery.trim() !== '';
+  const pagerEnabled = settings.showCategoriesTabs && pagerIndex >= 0 && !searching;
   const pagerRef = useRef<HTMLDivElement>(null);
   const currentPaneRef = useRef<HTMLDivElement>(null);
   const [pageWidth, setPageWidth] = useState(0);
@@ -307,6 +317,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   useLayoutEffect(() => {
     if (currentPaneRef.current) currentPaneRef.current.scrollTop = 0;
     setVisibleCount(40);
+    setTabHint(null);
     const previous = prevPagerIndex.current;
     prevPagerIndex.current = pagerIndex;
     if (swipeCommitted.current) {
@@ -335,6 +346,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
       return;
     }
     swipeCommitted.current = true;
+    setTabHint(target); // the bottom bar moves right now, not after the slide
     animate(x, -dir * w, { ...spring, velocity: vx }).then(() => setFilter(target));
   };
 
@@ -347,11 +359,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
       const phoneMatch = conv.phoneNumber.toLowerCase().includes(q);
       const snippetMatch = conv.lastMessageText?.toLowerCase().includes(q);
 
-      const hasMessageMatch = messages.some(
-        (m) => m.conversationId === conv.id && m.text.toLowerCase().includes(q)
-      );
-
-      if (!nameMatch && !phoneMatch && !snippetMatch && !hasMessageMatch) {
+      if (!nameMatch && !phoneMatch && !snippetMatch) {
         return false;
       }
     }
@@ -617,6 +625,31 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
             )}
           </div>
         )}
+        {/* Older messages are loaded when asked for (the newest ones show first so the inbox opens fast) */}
+        {f === filter && isNativePlatform && !historyLoaded && (
+          <div className="mx-4 mt-2 mb-4 p-4 rounded-[28px] bg-m3-surface-hi dark:bg-m3-d2 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light flex items-center justify-center shrink-0">
+              {isLoadingHistory ? <RefreshCw className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-m3-on-surface dark:text-white">
+                {isLoadingHistory ? 'Loading older messages…' : 'Showing your recent messages'}
+              </p>
+              <p className="text-xs text-m3-variant dark:text-m3-variant-dk">
+                {isLoadingHistory ? 'This can take a few seconds.' : 'Tap Show more to load every message on your phone.'}
+              </p>
+            </div>
+            {!isLoadingHistory && (
+              <button
+                type="button"
+                onClick={loadFullHistory}
+                className="px-4 py-2.5 rounded-full text-xs font-semibold bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep shrink-0"
+              >
+                Show more
+              </button>
+            )}
+          </div>
+        )}
       </>
     );
   };
@@ -670,7 +703,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto pb-28 pt-1" onScroll={handleScroll}>
-          {renderContent(filter, visibleCount)}
+          {searching ? <SearchResults query={deferredQuery} /> : renderContent(filter, visibleCount)}
         </div>
       )}
 

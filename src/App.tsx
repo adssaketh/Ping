@@ -11,20 +11,35 @@ import { SMSProvider, useSMS } from './context/SMSContext.tsx';
 import { TopSearchBar } from './components/TopSearchBar.tsx';
 import { ConversationList } from './components/ConversationList.tsx';
 import { ChatView } from './components/ChatView.tsx';
-import { NewChatModal } from './components/NewChatModal.tsx';
 import { IncomingSimulatorModal } from './components/IncomingSimulatorModal.tsx';
 import { PhoneFrameWrapper } from './components/PhoneFrameWrapper.tsx';
 import { NotificationBanner } from './components/NotificationBanner.tsx';
 import { NotificationShadeModal } from './components/NotificationShadeModal.tsx';
-import { SettingsModal } from './components/SettingsModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
-import { PrivacyPolicyModal } from './components/PrivacyPolicyModal.tsx';
-import { CreditsModal } from './components/CreditsModal.tsx';
 import { BottomTabs } from './components/BottomTabs.tsx';
-import { ProfilePhotoEditor } from './components/ProfilePhotoEditor.tsx';
 import { spring, useIsDesktop } from './motion.ts';
 import { handleBackPress, useBackHandler } from './backStack.ts';
 import { smsBridge } from './services/smsBridge.ts';
+
+// Big screens that are not needed to show the inbox are loaded the first time they open
+// (and fetched in the background shortly after launch), which makes the app start faster.
+function lazyScreen<T extends React.ComponentType<any>>(load: () => Promise<{ default: T }>): React.FC<React.ComponentProps<T>> {
+  const Screen = React.lazy(load as () => Promise<{ default: React.ComponentType<any> }>);
+  return (props: React.ComponentProps<T>) => (
+    <React.Suspense fallback={null}>
+      <Screen {...props} />
+    </React.Suspense>
+  );
+}
+const NewChatModal = lazyScreen(() => import('./components/NewChatModal.tsx').then((m) => ({ default: m.NewChatModal })));
+const SettingsModal = lazyScreen(() => import('./components/SettingsModal.tsx').then((m) => ({ default: m.SettingsModal })));
+const PrivacyPolicyModal = lazyScreen(() =>
+  import('./components/PrivacyPolicyModal.tsx').then((m) => ({ default: m.PrivacyPolicyModal }))
+);
+const CreditsModal = lazyScreen(() => import('./components/CreditsModal.tsx').then((m) => ({ default: m.CreditsModal })));
+const ProfilePhotoEditor = lazyScreen(() =>
+  import('./components/ProfilePhotoEditor.tsx').then((m) => ({ default: m.ProfilePhotoEditor }))
+);
 
 // Heavy screens only re-render when their own data changes, not when a menu opens or closes
 const ConversationListMemo = React.memo(ConversationList);
@@ -76,6 +91,18 @@ const AppContent: React.FC = () => {
   useBackHandler(!!activeConversationId, leaveChat);
   useBackHandler(filter !== 'all', useCallback(() => setFilter('all'), [setFilter]));
   useBackHandler(searchQuery.trim() !== '', useCallback(() => setSearchQuery(''), [setSearchQuery]));
+
+  // Fetch the big screens in the background once the inbox is showing
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      import('./components/NewChatModal.tsx');
+      import('./components/SettingsModal.tsx');
+      import('./components/ProfilePhotoEditor.tsx');
+      import('./components/PrivacyPolicyModal.tsx');
+      import('./components/CreditsModal.tsx');
+    }, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   // App-icon shortcuts (long-press the icon): New message, Search, Personal, Transactions
   const applyShortcut = (target: string) => {

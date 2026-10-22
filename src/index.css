@@ -196,3 +196,19 @@
     transform: none;
   }
 }
+
+/* The message you jumped to from a search result pulses once */
+.ping-flash {
+  animation: ping-flash 1.6s var(--ease-emphasized) 1;
+  border-radius: 20px;
+}
+@keyframes ping-flash {
+  0%,
+  100% {
+    background-color: transparent;
+  }
+  20%,
+  70% {
+    background-color: color-mix(in oklab, var(--c-primary-container) 85%, transparent);
+  }
+}
