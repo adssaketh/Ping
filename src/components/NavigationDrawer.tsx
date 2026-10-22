@@ -265,7 +265,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
 
       {/* Drawer content */}
       <motion.div
-        className="relative w-72 max-w-[80vw] h-full bg-m3-surface dark:bg-m3-d0 border-r border-m3-line dark:border-m3-d4 flex flex-col shadow-2xl z-50"
+        className="will-change-transform relative w-72 max-w-[80vw] h-full bg-m3-surface dark:bg-m3-d0 border-r border-m3-line dark:border-m3-d4 flex flex-col shadow-2xl z-50"
         initial={{ x: '-100%' }} animate={{ x: 0 }} exit={{ x: '-100%' }} transition={spring}
       >
         {panelContent}

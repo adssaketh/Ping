@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef, startTransition } from 'react';
 import {
   Conversation,
   Message,
@@ -88,6 +88,7 @@ interface SMSContextType {
     personal: number;
     transactions: number;
     promotions: number;
+    services: number;
     unread: number;
     archived: number;
     blocked: number;
@@ -647,6 +648,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [settings.spamAllow, settings.spamBlock, settings.spamLearned, updateSettings]
   );
 
+  // Is this sender one of your contacts?
+  const isKnownContact = (sender: string): boolean => {
+    const key = senderKey(sender);
+    return contacts.some((c) => senderKey(c.phoneNumber) === key);
+  };
+
   // Would this brand-new message be spam? (used to keep its notification quiet)
   const isIncomingSpam = (existing: Conversation | undefined, sender: string, body: string): boolean => {
     if (!settings.spamProtectionEnabled || !spamModelReady) return false;
@@ -688,6 +695,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       personal: active.filter((c) => c.category === 'personal').length,
       transactions: active.filter((c) => c.category === 'transactions').length,
       promotions: active.filter((c) => c.category === 'promotions').length,
+      services: active.filter((c) => c.category === 'services').length,
       unread: active.filter((c) => c.unreadCount > 0).length,
       archived: conversations.filter((c) => c.isArchived).length,
       blocked: conversations.filter((c) => c.isBlocked).length,
@@ -799,7 +807,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (!existing) {
         convId = `conv-${Date.now()}`;
         const avatarColor = getAvatarColorClasses(cleanSender);
-        const category: ConversationCategory = categorizeSms(cleanSender, cleanBody);
+        const category: ConversationCategory = categorizeSms(cleanSender, cleanBody, isKnownContact(cleanSender));
 
         targetConv = {
           id: convId,
@@ -1312,6 +1320,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // What the last sync looked like, so an unchanged inbox costs nothing
+  const lastSyncSignature = useRef('');
+  const lastContactsSignature = useRef('');
+  const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
   const syncDeviceSmsAndContacts = useCallback(async () => {
     setIsSyncingDevice(true);
     try {
@@ -1330,7 +1343,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (clean) contactNameMap.set(clean, c.name);
         });
 
-        setContacts((prev) => {
+        const contactsSignature = `${contactList.length}:${contactList[0]?.id}:${contactList[contactList.length - 1]?.id}`;
+        if (contactsSignature !== lastContactsSignature.current) {
+          lastContactsSignature.current = contactsSignature;
+          startTransition(() => setContacts((prev) => {
           const map = new Map<string, Contact>();
           prev.forEach((c) => map.set(c.phoneNumber.replace(/\s+/g, ''), c));
           contactList.forEach((dc) => {
@@ -1344,8 +1360,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             });
           });
           return Array.from(map.values());
-        });
+          }));
+        }
       }
+
+      // Let taps and animations run before the heavy part
+      await nextTick();
 
       // 2. Read device SMS messages from Telephony provider
       const rawSms = await smsBridge.readDeviceSms(1000);
@@ -1354,6 +1374,22 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSyncResult(result);
         return result;
       }
+
+      // Nothing new since the last sync: leave everything as it is (no re-render, no storage write)
+      let newest = 0;
+      let unreadTotal = 0;
+      for (const m of rawSms) {
+        if (m.date > newest) newest = m.date;
+        if (!m.isRead && !m.isSent) unreadTotal++;
+      }
+      const signature = `${rawSms.length}:${newest}:${unreadTotal}:${lastContactsSignature.current}`;
+      if (signature === lastSyncSignature.current) {
+        const same = { smsCount: rawSms.length, contactCount: contactList.length };
+        setSyncResult(same);
+        return same;
+      }
+      lastSyncSignature.current = signature;
+      await nextTick();
 
       // 3. Group messages into conversations by threadId or cleaned address
       const threadGroups = new Map<string, NativeSmsMessage[]>();
@@ -1369,6 +1405,14 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const previousMessages = messagesRef.current;
       const previousConversations = conversationsRef.current;
       const starredIds = new Set(previousMessages.filter((m) => m.isStarred).map((m) => m.id));
+      // lookups by number / id built once instead of searching the whole list for every thread
+      const previousByDigits = new Map<string, Conversation>();
+      const previousById = new Map<string, Conversation>();
+      for (const c of previousConversations) {
+        previousById.set(c.id, c);
+        const d = c.phoneNumber.replace(/\D/g, '');
+        if (d.length >= 7) previousByDigits.set(d, c);
+      }
 
       threadGroups.forEach((groupMsgs, key) => {
         // Sort group messages chronologically ascending
@@ -1381,7 +1425,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const matchedName = contactNameMap.get(cleanDigits) || rawAddress;
 
         const convId = `conv-dev-${key}`;
-        const category = categorizeSms(rawAddress, lastMsg.body);
+        const category = categorizeSms(rawAddress, lastMsg.body, contactNameMap.has(cleanDigits));
 
         let unread = 0;
         groupMsgs.forEach((m) => {
@@ -1398,9 +1442,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         // Check if existing conv exists to preserve pinned/archived states
-        const existing = previousConversations.find(
-          (c) => c.phoneNumber.replace(/\D/g, '') === cleanDigits && cleanDigits.length >= 7
-        );
+        const existing = cleanDigits.length >= 7 ? previousByDigits.get(cleanDigits) : undefined;
 
         newConversationsList.push({
           id: convId,
@@ -1429,15 +1471,23 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           !m.id.startsWith(DEVICE_ID_PREFIX) &&
           (m.isScheduled || m.status === 'sending' || m.status === 'failed' || (m.sender === 'me' && !isDefaultSms))
       );
+      const newById = new Map<string, Conversation>();
+      const newByDigits = new Map<string, Conversation>();
+      for (const c of newConversationsList) {
+        newById.set(c.id, c);
+        const d = c.phoneNumber.replace(/\D/g, '');
+        if (d.length >= 7) newByDigits.set(d, c);
+      }
       keepLocal.forEach((m) => {
-        const oldConv = previousConversations.find((c) => c.id === m.conversationId);
+        const oldConv = previousById.get(m.conversationId);
         if (!oldConv) return;
         const digits = oldConv.phoneNumber.replace(/\D/g, '');
-        const found = newConversationsList.find(
-          (c) => c.id === oldConv.id || (digits.length >= 7 && c.phoneNumber.replace(/\D/g, '') === digits)
-        );
+        const found = newById.get(oldConv.id) ?? (digits.length >= 7 ? newByDigits.get(digits) : undefined);
         const target: Conversation = found ?? { ...oldConv };
-        if (!found) newConversationsList.push(target);
+        if (!found) {
+          newConversationsList.push(target);
+          newById.set(target.id, target);
+        }
         if (m.timestamp > target.lastMessageTimestamp && !m.isScheduled) {
           target.lastMessageText = m.text;
           target.lastMessageTimestamp = m.timestamp;
@@ -1448,8 +1498,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       newMessagesList.sort((a, b) => a.timestamp - b.timestamp);
       newConversationsList.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
 
-      setMessages(newMessagesList);
-      setConversations(newConversationsList);
+      // Apply as a low-priority update: React can pause it whenever you tap or an animation needs a frame
+      startTransition(() => {
+        setMessages(newMessagesList);
+        setConversations(newConversationsList);
+      });
       const result = { smsCount: rawSms.length, contactCount: contactList.length };
       setSyncResult(result);
 
@@ -1518,8 +1571,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // foreground, so messages received while Ping was closed show up without a manual sync.
   useEffect(() => {
     if (!isNativePlatform) return;
+    let lastAutoSync = 0;
     const autoSync = async () => {
       if (isSyncingRef.current) return;
+      // coming back to the app within half a minute does not need another full read
+      if (Date.now() - lastAutoSync < 30000) return;
+      lastAutoSync = Date.now();
       isSyncingRef.current = true;
       try {
         const perms = await smsBridge.checkPermissions();

@@ -41,7 +41,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     <div className="px-4 pt-3 pb-2 shrink-0">
       {/* Material 3 Search Bar */}
       <motion.div
-        className="relative flex items-center h-14 px-3 rounded-full bg-m3-surface-hi dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition-all focus-within:bg-white dark:focus-within:bg-m3-d3 focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md"
+        className="relative flex items-center h-14 px-3 rounded-full bg-m3-surface-hi dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition focus-within:bg-white dark:focus-within:bg-m3-d3 focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md"
         initial={{ opacity: 0, y: -12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={spring}

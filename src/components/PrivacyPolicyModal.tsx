@@ -185,7 +185,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
           <motion.div
             role="dialog"
             aria-label="Privacy Policy"
-            className="relative w-full max-w-2xl h-full sm:h-[90vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-[32px] border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col overflow-hidden"
+            className="will-change-transform relative w-full max-w-2xl h-full sm:h-[90vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-[32px] border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col overflow-hidden"
             initial={{ opacity: 0, y: 64, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 40, scale: 0.98 }}

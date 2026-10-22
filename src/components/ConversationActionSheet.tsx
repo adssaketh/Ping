@@ -149,7 +149,7 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
           <motion.div
             role="dialog"
             aria-label="Conversation options"
-            className="relative w-full sm:max-w-sm max-h-[88vh] overflow-y-auto bg-white dark:bg-m3-d2 rounded-t-[32px] sm:rounded-[32px] shadow-2xl pb-3"
+            className="will-change-transform relative w-full sm:max-w-sm max-h-[88vh] overflow-y-auto bg-white dark:bg-m3-d2 rounded-t-[32px] sm:rounded-[32px] shadow-2xl pb-3"
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}

@@ -63,7 +63,7 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({ message,
           <motion.div
             role="dialog"
             aria-label="Message options"
-            className="relative w-full sm:max-w-sm max-h-[88vh] overflow-y-auto bg-white dark:bg-m3-d2 rounded-t-[32px] sm:rounded-[32px] shadow-2xl pb-3"
+            className="will-change-transform relative w-full sm:max-w-sm max-h-[88vh] overflow-y-auto bg-white dark:bg-m3-d2 rounded-t-[32px] sm:rounded-[32px] shadow-2xl pb-3"
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 60, opacity: 0 }}
@@ -133,11 +133,11 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({ message,
                     {showDetails && sms && (
                       <motion.dl
                         key="details"
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
                         transition={spring}
-                        className="mx-4 mb-2 px-4 py-3 rounded-2xl bg-m3-surface-hi dark:bg-m3-d3 text-xs overflow-hidden"
+                        className="mx-4 mb-2 px-4 py-3 rounded-2xl bg-m3-surface-hi dark:bg-m3-d3 text-xs"
                       >
                         <div className="flex justify-between py-1">
                           <dt className="text-m3-outline dark:text-m3-outline-dk">{isMe ? 'Sent' : 'Received'}</dt>

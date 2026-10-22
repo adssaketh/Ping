@@ -21,6 +21,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Tag,
+  Wrench,
   CreditCard,
   User,
 } from 'lucide-react';
@@ -120,6 +121,11 @@ const ConversationRow = React.memo(function ConversationRow({
                   Promo
                 </span>
               )}
+              {conv.category === 'services' && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 font-medium shrink-0">
+                  Service
+                </span>
+              )}
               {isSpam && (
                 <span className="text-[10px] px-1.5 py-0.2 rounded bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-medium shrink-0">
                   Spam
@@ -195,7 +201,7 @@ const ConversationRow = React.memo(function ConversationRow({
   );
 });
 
-const PAGER_FILTERS: FilterCategory[] = ['all', 'personal', 'transactions', 'promotions'];
+const PAGER_FILTERS: FilterCategory[] = ['all', 'personal', 'transactions', 'services', 'promotions'];
 
 export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat }) => {
   const {
@@ -363,6 +369,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     if (f === 'transactions') {
       return conv.category === 'transactions' && !conv.isArchived && !conv.isBlocked;
     }
+    if (f === 'services') {
+      return conv.category === 'services' && !conv.isArchived && !conv.isBlocked;
+    }
     if (f === 'promotions') {
       return conv.category === 'promotions' && !conv.isArchived && !conv.isBlocked;
     }
@@ -466,7 +475,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                 <div
                   key={msg.id}
                   onClick={() => selectConversation(msg.conversationId)}
-                  className="p-3.5 bg-white dark:bg-m3-d1 rounded-2xl border border-m3-line dark:border-m3-d4 hover:border-m3-primary/40 cursor-pointer shadow-xs transition-all hover:shadow-sm"
+                  className="p-3.5 bg-white dark:bg-m3-d1 rounded-2xl border border-m3-line dark:border-m3-d4 hover:border-m3-primary/40 cursor-pointer shadow-xs transition hover:shadow-sm"
                 >
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-semibold text-m3-primary dark:text-m3-primary-light">
@@ -500,6 +509,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                 <User className="w-8 h-8 stroke-1" />
               ) : f === 'transactions' ? (
                 <CreditCard className="w-8 h-8 stroke-1" />
+              ) : f === 'services' ? (
+                <Wrench className="w-8 h-8 stroke-1" />
               ) : f === 'promotions' ? (
                 <Tag className="w-8 h-8 stroke-1" />
               ) : f === 'archived' ? (
@@ -517,6 +528,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                 ? 'No personal text messages'
                 : f === 'transactions'
                 ? 'No transaction or bank alerts'
+                : f === 'services'
+                ? 'No service messages'
                 : f === 'promotions'
                 ? 'No promotional deals'
                 : f === 'archived'
@@ -534,6 +547,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                 ? 'Messages from family and friends will appear here.'
                 : f === 'transactions'
                 ? 'Bank OTPs, verification codes, and flight updates will appear here.'
+                : f === 'services'
+                ? 'Account updates, bill reminders, deliveries and government notices will appear here.'
                 : f === 'promotions'
                 ? 'Deals, coupons, and carrier promotions will appear here.'
                 : f === 'spam'
@@ -614,7 +629,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                   aria-hidden={slot !== 'cur'}
                   className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y pb-28 pt-1"
                 >
-                  {f ? renderContent(f, slot === 'cur' ? visibleCount : 20) : null}
+                  {f ? renderContent(f, slot === 'cur' ? visibleCount : 12) : null}
                 </div>
               );
             })}

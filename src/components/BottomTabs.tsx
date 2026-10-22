@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { CreditCard, MessageSquare, Tag, User } from 'lucide-react';
+import { CreditCard, MessageSquare, Tag, User, Wrench } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { FilterCategory } from '../types.ts';
 import { spring, springBouncy } from '../motion.ts';
 
-type TabId = 'all' | 'personal' | 'transactions' | 'promotions';
+type TabId = 'all' | 'personal' | 'transactions' | 'services' | 'promotions';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'all', label: 'All', icon: MessageSquare },
   { id: 'personal', label: 'Personal', icon: User },
   { id: 'transactions', label: 'Transactions', icon: CreditCard },
+  { id: 'services', label: 'Services', icon: Wrench },
   { id: 'promotions', label: 'Promotions', icon: Tag },
 ];
 
@@ -62,7 +63,7 @@ export const BottomTabs: React.FC = () => {
                   aria-current={active ? 'page' : undefined}
                   className="flex-1 min-w-0 flex flex-col items-center gap-1 py-1 rounded-2xl"
                 >
-                  <span className="relative flex items-center justify-center w-16 h-8 rounded-full">
+                  <span className="relative flex items-center justify-center w-14 h-8 rounded-full">
                     {active && (
                       <motion.span
                         layoutId="bottom-tab-pill"
@@ -84,7 +85,7 @@ export const BottomTabs: React.FC = () => {
                     )}
                   </span>
                   <span
-                    className={`text-[11px] truncate max-w-full ${
+                    className={`text-[10.5px] truncate max-w-full ${
                       active
                         ? 'font-bold text-m3-on-surface dark:text-white'
                         : 'font-medium text-m3-variant dark:text-m3-variant-dk'

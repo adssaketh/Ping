@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import {
   MessageSquare,
@@ -63,10 +63,15 @@ const AppContent: React.FC = () => {
   // Stable callbacks: new function objects every render would defeat React.memo above
   const openDrawer = useCallback(() => setDrawerOpen(true), []);
   const closeDrawer = useCallback(() => setDrawerOpen(false), []);
-  const openNewChat = useCallback(() => setNewChatOpen(true), []);
+  const openNewChat = useCallback(() => startTransition(() => setNewChatOpen(true)), []);
   const openSimulator = useCallback(() => setSimulatorOpen(true), []);
   const openShade = useCallback(() => setShadeOpen(true), []);
-  const openSettings = useCallback(() => setSettingsOpen(true), []);
+  const openSettings = useCallback(() => startTransition(() => setSettingsOpen(true)), []);
+  // From the drawer: let it finish sliding away before the big Settings screen starts to open
+  const openSettingsFromDrawer = useCallback(() => {
+    setDrawerOpen(false);
+    window.setTimeout(() => startTransition(() => setSettingsOpen(true)), 200);
+  }, []);
   const openPrivacy = useCallback(() => setPrivacyOpen(true), []);
   const openCredits = useCallback(() => setCreditsOpen(true), []);
   const leaveChat = useCallback(() => selectConversation(null), [selectConversation]);
@@ -112,7 +117,7 @@ const AppContent: React.FC = () => {
         onClose={closeDrawer}
         onOpenSimulator={openSimulator}
         onOpenNotifications={openShade}
-        onOpenSettings={openSettings}
+        onOpenSettings={openSettingsFromDrawer}
       />
 
       <NotificationShadeModal
@@ -233,13 +238,13 @@ const AppContent: React.FC = () => {
                       Ping
                     </h2>
                     <p className="text-xs text-m3-outline dark:text-m3-outline-dk max-w-sm mt-1.5 leading-relaxed">
-                      Standard text SMS messaging with category tabs (Personal, Transactions, Promotions), Copy OTP notifications, and full settings.
+                      Standard text SMS messaging with category tabs (Personal, Transactions, Services, Promotions), Copy OTP notifications, and full settings.
                     </p>
                     <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                       <button
                         type="button"
                         onClick={() => setNewChatOpen(true)}
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-m3-primary text-white hover:bg-m3-primary-hover text-xs font-semibold shadow-sm active:scale-95 transition-all"
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-m3-primary text-white hover:bg-m3-primary-hover text-xs font-semibold shadow-sm active:scale-95 transition"
                       >
                         <Plus className="w-4 h-4" />
                         <span>Start new chat</span>
@@ -247,7 +252,7 @@ const AppContent: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setSettingsOpen(true)}
-                        className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-m3-surface-hi dark:bg-m3-d3 text-m3-primary dark:text-m3-primary-light hover:bg-m3-primary-container text-xs font-semibold shadow-xs active:scale-95 transition-all"
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-full bg-m3-surface-hi dark:bg-m3-d3 text-m3-primary dark:text-m3-primary-light hover:bg-m3-primary-container text-xs font-semibold shadow-xs active:scale-95 transition"
                       >
                         <Settings className="w-4 h-4" />
                         <span>Settings</span>

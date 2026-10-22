@@ -1,6 +1,6 @@
 export type DeliveryStatus = 'sending' | 'sent' | 'delivered' | 'failed';
 
-export type ConversationCategory = 'personal' | 'transactions' | 'promotions';
+export type ConversationCategory = 'personal' | 'transactions' | 'services' | 'promotions';
 
 export interface Message {
   id: string;
@@ -49,6 +49,7 @@ export type FilterCategory =
   | 'starred'
   | 'archived'
   | 'blocked'
+  | 'services'
   | 'spam';
 
 export interface SchedulePresetOption {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy, fadeFast } from '../motion.ts';
 import { Search, X, UserPlus, Phone, ArrowRight, RefreshCw } from 'lucide-react';
@@ -19,6 +19,10 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
     isSyncingDevice,
   } = useSMS();
   const [query, setQuery] = useState('');
+  const [shown, setShown] = useState(40);
+  useEffect(() => {
+    setShown(40);
+  }, [query, isOpen]);
 
 
   const filteredContacts = contacts.filter((c) => {
@@ -59,7 +63,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
 
       {/* Sheet / Modal */}
       <motion.div
-        className="relative w-full sm:max-w-md h-full sm:h-auto sm:max-h-[85vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
+        className="will-change-transform relative w-full sm:max-w-md h-full sm:h-auto sm:max-h-[85vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
         initial={{ opacity: 0, y: 56, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 36, scale: 0.98 }} transition={spring}
       >
         {/* Header */}
@@ -168,7 +172,8 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
               </p>
             </div>
           ) : (
-            filteredContacts.map((contact) => (
+            <>
+            {filteredContacts.slice(0, shown).map((contact) => (
               <button
                 key={contact.id}
                 type="button"
@@ -189,7 +194,17 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
                   </p>
                 </div>
               </button>
-            ))
+            ))}
+            {filteredContacts.length > shown && (
+              <button
+                type="button"
+                onClick={() => setShown((n) => n + 100)}
+                className="w-full py-3 rounded-2xl text-xs font-semibold text-m3-primary dark:text-m3-primary-light hover:bg-m3-surface-hi dark:hover:bg-m3-d2"
+              >
+                Show {Math.min(100, filteredContacts.length - shown)} more contacts
+              </button>
+            )}
+            </>
           )}
         </div>
       </motion.div>

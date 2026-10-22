@@ -92,7 +92,7 @@ export const IncomingSimulatorModal: React.FC<IncomingSimulatorModalProps> = ({
         onClick={onClose}
       />
       <motion.div
-        className="relative w-full max-w-md bg-white dark:bg-m3-d2 rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl p-6 z-50"
+        className="will-change-transform relative w-full max-w-md bg-white dark:bg-m3-d2 rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl p-6 z-50"
         initial={{ opacity: 0, scale: 0.88, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.94 }} transition={springBouncy}
       >
         <div className="flex items-center justify-between mb-4">

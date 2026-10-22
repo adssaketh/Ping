@@ -288,35 +288,49 @@ export function extractOtpCode(text: string): string | null {
  */
 export function categorizeSms(
   address: string,
-  text: string
-): 'personal' | 'transactions' | 'promotions' {
-  const addr = (address || '').toLowerCase();
+  text: string,
+  isContact = false
+): 'personal' | 'transactions' | 'services' | 'promotions' {
+  const sender = (address || '').trim();
   const body = (text || '').toLowerCase();
 
-  // Transaction keywords & alphanumeric sender IDs (e.g. AD-HDFCBK, AX-CHASE)
-  const isAlphaNumericSender = /^[a-z]{2}-[a-z0-9]{4,10}$/i.test(address.trim());
-  const isBankOrFinancial =
-    /bank|chase|wells|citi|hdfc|sbi|icici|axis|paypal|venmo|stripe|paytm|wallet|alert|otp|verify|auth/i.test(
-      addr
-    );
+  // 1. People you know are always personal
+  if (isContact) return 'personal';
+
+  // 2. A phone number (with or without +91, spaces or dashes) is a person
+  if (/^\+?[\d\s\-()]{7,}$/.test(sender)) return 'personal';
+
+  // 3. Registered business sender IDs end with a letter that says what the message is:
+  //    AX-HDFCBK-T (transaction), JK-YESBNK-S (service), XX-ECIsms-G (government), VM-SHOP-P (promotion)
+  const header = /^[a-z0-9]{2}-[a-z0-9]{2,12}-([a-z])$/i.exec(sender);
+  if (header) {
+    switch (header[1].toUpperCase()) {
+      case 'T':
+        return 'transactions';
+      case 'S':
+      case 'G':
+        return 'services';
+      case 'P':
+        return 'promotions';
+      default:
+        break; // unknown letter: judge by the message itself
+    }
+  }
+
+  // 4. Short numeric codes and business IDs without a letter at the end: judge by the message itself
   const isTransactionBody =
-    /(?:otp|verification code|one time password|debited|credited|transferred|acct\s*#?|account\s*#?|balance|stmt|txn|withdrawn|deposited|charged|spent|atm|pos|card\s*ending|payment of)\b/i.test(
+    /(?:otp|verification code|one time password|debited|credited|transferred|acct\s*#?|account\s*#?|balance|stmt|txn|withdrawn|deposited|charged|spent|atm|card\s*ending|payment of)\b/i.test(
       body
     );
+  if (isTransactionBody) return 'transactions';
 
-  if (isAlphaNumericSender || isBankOrFinancial || isTransactionBody) {
-    return 'transactions';
-  }
-
-  // Promotional keywords & marketing offers
   const isPromoBody =
-    /(?:off\b|discount|deal|promo|coupon|voucher|sale\b|save\s*\$|save\s*\d+%|limited time|free shipping|buy\s*1\s*get|cashback|cash\s*back|offer\s*expires|hurry|shop now|click here to claim|exclusive deal)\b/i.test(
+    /(?:off\b|discount|deal|promo|coupon|voucher|sale\b|save\s*\d+%|limited time|free shipping|buy\s*1\s*get|cashback|cash\s*back|offer\s*expires|hurry|shop now|click here to claim|exclusive deal)\b/i.test(
       body
     );
-  if (isPromoBody) {
-    return 'promotions';
-  }
+  if (isPromoBody) return 'promotions';
 
-  return 'personal';
+  // 5. Anything else that is not a phone number or a contact is a business ID: a service message
+  return /[a-z]/i.test(sender) ? 'services' : 'personal';
 }
 

@@ -104,7 +104,7 @@ export const ScheduleModal: React.FC<ScheduleModalProps> = ({
 
       {/* Modal / Bottom Sheet */}
       <motion.div
-        className="relative w-full max-w-sm bg-white dark:bg-m3-d2 border border-m3-line dark:border-m3-d4 rounded-t-3xl sm:rounded-3xl shadow-2xl z-50 overflow-hidden"
+        className="will-change-transform relative w-full max-w-sm bg-white dark:bg-m3-d2 border border-m3-line dark:border-m3-d4 rounded-t-3xl sm:rounded-3xl shadow-2xl z-50 overflow-hidden"
         initial={{ opacity: 0, y: 72 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 56 }} transition={spring}
       >
         {/* Grab bar on mobile */}

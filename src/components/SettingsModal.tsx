@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy, fadeFast } from '../motion.ts';
 import {
@@ -77,6 +77,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+  // Only the first screen is drawn while the panel slides in; the sections further down follow right after
+  const [sectionsReady, setSectionsReady] = useState(false);
+  useEffect(() => {
+    if (!isOpen) {
+      setSectionsReady(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSectionsReady(true), 380);
+    return () => window.clearTimeout(timer);
+  }, [isOpen]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [versionClicks, setVersionClicks] = useState(0);
   const [devOptionsUnlocked, setDevOptionsUnlocked] = useState(false);
@@ -149,7 +159,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
       {/* Settings Dialog / Screen */}
       <motion.div
-        className="relative w-full max-w-2xl h-full sm:h-[90vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
+        className="will-change-transform relative w-full max-w-2xl h-full sm:h-[90vh] bg-m3-surface dark:bg-m3-d0 sm:rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl flex flex-col z-50 overflow-hidden"
         initial={{ opacity: 0, y: 56, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 36, scale: 0.98 }} transition={spring}
       >
         {/* Toast */}
@@ -414,7 +424,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       key={mode}
                       type="button"
                       onClick={() => setThemeMode(mode)}
-                      className={`py-2.5 px-3 rounded-2xl text-xs font-medium border flex flex-col items-center gap-1.5 transition-all ${
+                      className={`py-2.5 px-3 rounded-2xl text-xs font-medium border flex flex-col items-center gap-1.5 transition ${
                         isSelected
                           ? 'bg-m3-primary-container dark:bg-m3-primary-deep border-m3-primary dark:border-m3-primary-light text-m3-on-primary-deep dark:text-m3-primary-container font-bold shadow-xs'
                           : 'border-m3-line dark:border-m3-d4 text-m3-variant dark:text-m3-variant-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3'
@@ -431,6 +441,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
+          {sectionsReady ? (
+            <>
           {/* Section 1: Message Organization & Category Tabs */}
           <div className="bg-white dark:bg-m3-d1 rounded-3xl p-4 sm:p-5 border border-m3-line dark:border-m3-d4 shadow-xs space-y-4">
             <div className="flex items-center gap-2.5 pb-2 border-b border-m3-line dark:border-m3-d4">
@@ -974,6 +986,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 )}
               </div>
             </div>
+          )}
+
+            </>
+          ) : (
+            <div className="h-[900px]" aria-hidden="true" />
           )}
 
           {/* Privacy Policy */}

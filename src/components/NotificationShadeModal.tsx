@@ -77,7 +77,7 @@ export const NotificationShadeModal: React.FC<NotificationShadeModalProps> = ({
 
       {/* Shade Container */}
       <motion.div
-        className="relative w-full max-w-md bg-white dark:bg-m3-d2 rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl p-4 sm:p-5 z-50 flex flex-col max-h-[85vh]"
+        className="will-change-transform relative w-full max-w-md bg-white dark:bg-m3-d2 rounded-3xl border border-m3-line dark:border-m3-d4 shadow-2xl p-4 sm:p-5 z-50 flex flex-col max-h-[85vh]"
         initial={{ opacity: 0, y: -48 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -32 }} transition={springBouncy}
       >
         {/* Header */}
@@ -213,7 +213,7 @@ export const NotificationShadeModal: React.FC<NotificationShadeModalProps> = ({
                 <div
                   key={item.id}
                   onClick={() => handleOpenThread(item.conversationId)}
-                  className="p-3 bg-m3-surface dark:bg-m3-d3 rounded-2xl border border-m3-line dark:border-m3-d5 hover:border-m3-primary/40 transition-all cursor-pointer"
+                  className="p-3 bg-m3-surface dark:bg-m3-d3 rounded-2xl border border-m3-line dark:border-m3-d5 hover:border-m3-primary/40 transition cursor-pointer"
                 >
                   <div className="flex items-center justify-between text-[11px] text-m3-outline dark:text-m3-outline-dk mb-1">
                     <span className="font-bold text-xs text-m3-primary dark:text-m3-primary-light">
@@ -238,7 +238,7 @@ export const NotificationShadeModal: React.FC<NotificationShadeModalProps> = ({
                           e.stopPropagation();
                           handleCopy(item.id, item.otpCode!);
                         }}
-                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow-xs transition-all ${
+                        className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold shadow-xs transition ${
                           isCopied
                             ? 'bg-emerald-600 text-white'
                             : 'bg-m3-primary text-white hover:bg-m3-primary-hover active:scale-95'

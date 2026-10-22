@@ -35,7 +35,7 @@ export const PWAInstallButton: React.FC<{ compact?: boolean }> = ({ compact }) =
           type="button"
           onClick={handleInstallClick}
           title="Install as native Android app"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-m3-primary text-white hover:bg-m3-primary-hover text-xs font-semibold shadow-xs active:scale-95 transition-all shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-m3-primary text-white hover:bg-m3-primary-hover text-xs font-semibold shadow-xs active:scale-95 transition shrink-0"
         >
           <Download className="w-3.5 h-3.5" />
           <span>Install App</span>

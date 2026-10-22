@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy } from '../motion.ts';
 import {
@@ -91,10 +91,40 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [messages, activeConversation]);
 
-  // Auto scroll to bottom when new messages arrive
+  // Long conversations: draw the newest 80 messages first (opening stays smooth), older ones on request
+  const [visibleCount, setVisibleCount] = useState(80);
+  const feedRef = useRef<HTMLDivElement>(null);
+  const scrollAnchor = useRef<number | null>(null);
+  const didInitialScroll = useRef(false);
+  const shownMessages = useMemo(
+    () => (convMessages.length > visibleCount ? convMessages.slice(-visibleCount) : convMessages),
+    [convMessages, visibleCount]
+  );
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [convMessages.length]);
+    setVisibleCount(80);
+    didInitialScroll.current = false;
+  }, [activeConversation?.id]);
+
+  const showEarlier = () => {
+    scrollAnchor.current = feedRef.current ? feedRef.current.scrollHeight : null;
+    setVisibleCount((c) => c + 100);
+  };
+
+  // keep the same message under your thumb after older ones are added above it
+  useLayoutEffect(() => {
+    if (scrollAnchor.current !== null && feedRef.current) {
+      feedRef.current.scrollTop += feedRef.current.scrollHeight - scrollAnchor.current;
+      scrollAnchor.current = null;
+    }
+  }, [visibleCount]);
+
+  // Scroll to the newest message: instantly when a chat opens, smoothly for new messages
+  useEffect(() => {
+    const firstTime = !didInitialScroll.current;
+    didInitialScroll.current = true;
+    messagesEndRef.current?.scrollIntoView({ behavior: firstTime ? 'auto' : 'smooth' });
+  }, [convMessages.length, activeConversation?.id]);
 
   if (!activeConversation) {
     return (
@@ -192,7 +222,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
           <button
             type="button"
             onClick={onBack}
-            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
+            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition"
             aria-label="Back to conversations"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -225,7 +255,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
           <button
             type="button"
             onClick={() => showToast(`Calling ${activeConversation.phoneNumber}...`)}
-            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
+            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition"
             title="Call"
             aria-label="Call contact"
           >
@@ -235,7 +265,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
           <button
             type="button"
             onClick={() => setMenuOpen((prev) => !prev)}
-            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all"
+            className="p-2 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition"
             title="Options"
             aria-label="More options"
           >
@@ -348,7 +378,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
       </div>
 
       {/* Messages Scrollable Feed */}
-      <div className="flex-1 overflow-y-auto px-4 md:px-8 2xl:px-[10%] py-3 space-y-3">
+      <div ref={feedRef} className="flex-1 overflow-y-auto px-4 md:px-8 2xl:px-[10%] py-3 space-y-3">
         {/* Spam warning */}
         {isSpamConversation(activeConversation.id) && (
           <motion.div
@@ -416,9 +446,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
         </div>
 
         {/* Message bubbles stream */}
-        {convMessages.map((msg, index) => {
+        {convMessages.length > shownMessages.length && (
+          <button
+            type="button"
+            onClick={showEarlier}
+            className="mx-auto block px-5 py-2.5 rounded-full text-xs font-semibold bg-m3-surface-hi dark:bg-m3-d2 text-m3-primary dark:text-m3-primary-light"
+          >
+            Show earlier messages ({convMessages.length - shownMessages.length})
+          </button>
+        )}
+        {shownMessages.map((msg, index) => {
           const isMe = msg.sender === 'me';
-          const prevMsg = convMessages[index - 1];
+          const prevMsg = shownMessages[index - 1];
           const isFirstInGroup = !prevMsg || prevMsg.sender !== msg.sender;
           const isScheduled = msg.isScheduled;
           const otpCode = !isMe ? extractCode(msg.text) : null;
@@ -427,7 +466,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             <motion.div
               key={msg.id}
               className="group/msg flex flex-col"
-              initial={index >= convMessages.length - 12 ? { opacity: 0, y: 14, scale: 0.94 } : false}
+              initial={index >= shownMessages.length - 12 ? { opacity: 0, y: 14, scale: 0.94 } : false}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={spring}
               style={{ transformOrigin: isMe ? 'bottom right' : 'bottom left' }}
@@ -469,7 +508,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                   {/* Bubble */}
                   <div
                     {...bindBubblePress(msg)}
-                    className={`relative p-3.5 text-sm leading-relaxed transition-all ${
+                    className={`relative p-3.5 text-sm leading-relaxed transition ${
                       isMe
                         ? 'bg-m3-primary-container dark:bg-m3-primary-deep text-m3-on-primary-deep dark:text-m3-primary-container rounded-2xl rounded-br-xs shadow-xs'
                         : 'bg-white dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk rounded-2xl rounded-bl-xs border border-m3-line dark:border-m3-d4 shadow-xs'
@@ -488,7 +527,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                         <button
                           type="button"
                           onClick={() => handleCopyOtp(otpCode)}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover active:scale-95 transition-all shadow-xs"
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover active:scale-95 transition shadow-xs"
                         >
                           {copiedCode === otpCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                           <span>{copiedCode === otpCode ? 'Copied' : 'Copy code'}</span>
@@ -577,7 +616,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
 
       {/* SMS Composer Bottom Bar */}
       <div className="p-3 md:px-6 2xl:px-[10%] bg-m3-surface dark:bg-m3-d0 border-t border-m3-line dark:border-m3-d4 shrink-0">
-        <div className="relative flex items-end gap-2 bg-m3-surface-hi dark:bg-m3-d2 rounded-3xl p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-m3-primary/30 transition-all">
+        <div className="relative flex items-end gap-2 bg-m3-surface-hi dark:bg-m3-d2 rounded-3xl p-1.5 shadow-sm focus-within:ring-2 focus-within:ring-m3-primary/30 transition">
           {/* Schedule button */}
           <button
             type="button"
@@ -623,7 +662,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             animate={{ scale: inputText.trim() ? 1 : 0.92 }}
             transition={springBouncy}
             disabled={!inputText.trim()}
-            className="p-2.5 rounded-full bg-m3-primary dark:bg-m3-primary-light text-white dark:text-m3-on-primary-deep disabled:opacity-30 disabled:pointer-events-none hover:bg-m3-primary-hover active:scale-95 transition-all shadow-xs shrink-0"
+            className="p-2.5 rounded-full bg-m3-primary dark:bg-m3-primary-light text-white dark:text-m3-on-primary-deep disabled:opacity-30 disabled:pointer-events-none hover:bg-m3-primary-hover active:scale-95 transition shadow-xs shrink-0"
             aria-label="Send SMS"
           >
             <Send className="w-4 h-4 fill-current ml-0.5" />

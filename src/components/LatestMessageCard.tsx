@@ -18,6 +18,7 @@ interface LatestMessageCardProps {
 const CATEGORY_LABEL: Record<string, string> = {
   personal: 'Personal',
   transactions: 'Bank / Alert',
+  services: 'Service',
   promotions: 'Promo',
 };
 
