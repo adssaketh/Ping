@@ -1,6 +1,19 @@
 import React, { useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Menu, Search, X, Settings, ShieldCheck, FileText, Camera, Code } from 'lucide-react';
+import {
+  Search,
+  X,
+  Settings,
+  ShieldCheck,
+  FileText,
+  Camera,
+  Code,
+  Star,
+  Archive,
+  Ban,
+  ShieldAlert,
+  CheckCheck,
+} from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { FilterCategory } from '../types.ts';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
@@ -10,7 +23,6 @@ import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { useBackHandler } from '../backStack.ts';
 
 interface TopSearchBarProps {
-  onOpenDrawer: () => void;
   onOpenSimulator?: () => void;
   onOpenNotifications?: () => void;
   onOpenSettings: () => void;
@@ -19,7 +31,6 @@ interface TopSearchBarProps {
 }
 
 export const TopSearchBar: React.FC<TopSearchBarProps> = ({
-  onOpenDrawer,
   onOpenSettings,
   onOpenPrivacy,
   onOpenCredits,
@@ -32,10 +43,36 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
     categoryCounts,
     settings,
     updateSettings,
+    conversations,
+    markAsRead,
+    starredMessages,
   } = useSMS();
 
   const [menuOpen, setMenuOpen] = useState(false);
   useBackHandler(menuOpen, () => setMenuOpen(false));
+
+  const unreadTotal = conversations.filter((c) => c.unreadCount > 0 && !c.isArchived && !c.isBlocked).length;
+  const archivedCount = conversations.filter((c) => c.isArchived).length;
+  const blockedCount = conversations.filter((c) => c.isBlocked).length;
+
+  const openFolder = (folder: FilterCategory) => {
+    setMenuOpen(false);
+    setFilter(folder);
+  };
+
+  const markAllRead = () => {
+    conversations.forEach((c) => {
+      if (c.unreadCount > 0) markAsRead(c.id);
+    });
+    setMenuOpen(false);
+  };
+
+  const folders: { id: FilterCategory; label: string; icon: React.ElementType; count: number }[] = [
+    { id: 'starred', label: 'Starred', icon: Star, count: starredMessages.length },
+    { id: 'archived', label: 'Archived', icon: Archive, count: archivedCount },
+    { id: 'spam', label: 'Spam', icon: ShieldAlert, count: categoryCounts.spam },
+    { id: 'blocked', label: 'Blocked', icon: Ban, count: blockedCount },
+  ];
 
   return (
     <div className="px-4 pt-3 pb-2 shrink-0">
@@ -46,21 +83,14 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={spring}
       >
-        <button
-          type="button"
-          onClick={onOpenDrawer}
-          className="xl:hidden p-2.5 -ml-1 text-m3-variant dark:text-m3-variant-dk hover:text-m3-on-surface dark:hover:text-white rounded-full hover:bg-black/5 dark:hover:bg-white/10"
-          aria-label="Navigation drawer"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
 
-        <div className="flex-1 flex items-center mx-2 xl:ml-4 gap-2">
-          <Search className="w-4 h-4 text-m3-outline dark:text-m3-outline-dk shrink-0" />
+        <div className="flex-1 flex items-center ml-3 mr-2 gap-2">
+          <Search className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            id="ping-search-input"
             placeholder="Search in Ping"
             className="w-full bg-transparent text-sm font-normal text-m3-on-surface dark:text-m3-on-surface-dk placeholder-m3-outline dark:placeholder-m3-outline-dk outline-none truncate"
           />
@@ -99,7 +129,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
                 <motion.div
-                  className="absolute right-0 top-12 w-72 p-2 bg-white dark:bg-m3-d2 border border-m3-line dark:border-m3-d4 rounded-[28px] shadow-2xl z-50 text-sm"
+                  className="absolute right-0 top-12 w-72 max-h-[78vh] overflow-y-auto p-2 bg-white dark:bg-m3-d2 border border-m3-line dark:border-m3-d4 rounded-[28px] shadow-2xl z-50 text-sm"
                   style={{ transformOrigin: 'top right' }}
                   initial={{ opacity: 0, scale: 0.85, y: -8 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -144,6 +174,38 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                   </div>
                   <div className="h-px mx-2 mb-1 bg-m3-line dark:bg-m3-d4" />
 
+                  {folders.map((f) => {
+                    const Icon = f.icon;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => openFolder(f.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl"
+                      >
+                        <Icon className="w-4 h-4 text-m3-variant dark:text-m3-variant-dk" />
+                        <span className="flex-1 text-left">{f.label}</span>
+                        {f.count > 0 && (
+                          <span className="text-[11px] text-m3-outline dark:text-m3-outline-dk">{f.count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    disabled={unreadTotal === 0}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <CheckCheck className="w-4 h-4 text-m3-variant dark:text-m3-variant-dk" />
+                    <span className="flex-1 text-left">Mark all as read</span>
+                    {unreadTotal > 0 && (
+                      <span className="text-[11px] text-m3-outline dark:text-m3-outline-dk">{unreadTotal}</span>
+                    )}
+                  </button>
+                  <div className="h-px mx-2 my-1 bg-m3-line dark:bg-m3-d4" />
+
                   <button
                     type="button"
                     onClick={() => {
@@ -153,7 +215,7 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
                     className="w-full flex items-center gap-3 px-4 py-3 text-xs font-medium text-m3-on-surface dark:text-m3-on-surface-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-2xl"
                   >
                     <Settings className="w-4 h-4 text-m3-variant dark:text-m3-variant-dk" />
-                    <span>Ping settings</span>
+                    <span>Settings</span>
                   </button>
 
                   {/* PWA Install Action if available */}

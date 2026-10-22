@@ -4,4 +4,12 @@
     <string name="title_activity_main">Ping</string>
     <string name="package_name">com.ping.sms</string>
     <string name="custom_url_scheme">com.ping.sms</string>
+    <string name="shortcut_new_message_short">New SMS</string>
+    <string name="shortcut_new_message_long">New message</string>
+    <string name="shortcut_search_short">Search</string>
+    <string name="shortcut_search_long">Search messages</string>
+    <string name="shortcut_personal_short">Personal</string>
+    <string name="shortcut_personal_long">Personal messages</string>
+    <string name="shortcut_transactions_short">Transactions</string>
+    <string name="shortcut_transactions_long">Bank and transaction alerts</string>
 </resources>

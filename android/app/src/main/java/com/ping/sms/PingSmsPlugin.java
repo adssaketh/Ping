@@ -16,6 +16,7 @@ import android.os.Build;
 import android.provider.ContactsContract;
 import android.provider.Telephony;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.view.Window;
 import android.telephony.PhoneNumberUtils;
 import androidx.activity.result.ActivityResult;
@@ -99,6 +100,39 @@ public class PingSmsPlugin extends Plugin {
         if (instance == null) return false;
         instance.notifyListeners("backPressed", new JSObject());
         return true;
+    }
+
+    /** An app-icon shortcut was tapped while the app was already running. */
+    public static void notifyShortcut(String target) {
+        if (instance == null) return;
+        JSObject ret = new JSObject();
+        ret.put("target", target);
+        instance.notifyListeners("shortcut", ret);
+    }
+
+    /** Returns the shortcut that launched the app (once), so a cold start also ends up in the right place. */
+    @PluginMethod
+    public void consumeLaunchShortcut(PluginCall call) {
+        JSObject ret = new JSObject();
+        String target = MainActivity.pendingShortcut;
+        MainActivity.pendingShortcut = null;
+        if (target != null) ret.put("target", target);
+        call.resolve(ret);
+    }
+
+    /** Opens the on-screen keyboard for the web view (a page cannot do this without a touch). */
+    @PluginMethod
+    public void showKeyboard(PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity != null && getBridge() != null) {
+            activity.runOnUiThread(() -> {
+                View web = getBridge().getWebView();
+                web.requestFocus();
+                InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) imm.showSoftInput(web, InputMethodManager.SHOW_IMPLICIT);
+            });
+        }
+        call.resolve();
     }
 
     /** The web app says whether the back button currently has something to close. */

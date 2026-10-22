@@ -20,6 +20,7 @@ import {
   ArrowRight,
   MessageSquare,
   MessageSquarePlus,
+  X,
   Tag,
   Wrench,
   CreditCard,
@@ -197,6 +198,13 @@ const ConversationRow = React.memo(function ConversationRow({
       </div>
   );
 });
+
+const FOLDER_TITLES: Partial<Record<FilterCategory, string>> = {
+  starred: 'Starred',
+  archived: 'Archived',
+  spam: 'Spam',
+  blocked: 'Blocked',
+};
 
 const PAGER_FILTERS: FilterCategory[] = ['all', 'personal', 'transactions', 'services', 'promotions'];
 
@@ -608,6 +616,20 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
   return (
     <div className="relative flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-m3-surface dark:bg-m3-d0">
+      {FOLDER_TITLES[filter] && (
+        <div className="px-4 pt-1 pb-2 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className="flex items-center gap-2 pl-4 pr-3 py-2 rounded-full bg-m3-primary-container text-m3-on-primary-deep dark:bg-m3-primary-deep dark:text-m3-primary-container text-xs font-semibold"
+            aria-label="Back to all messages"
+          >
+            <span>{FOLDER_TITLES[filter]}</span>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {pagerEnabled ? (
         /* Swipe left / right to move between All, Personal, Transactions and Promotions */
         <div ref={pagerRef} className="flex-1 min-h-0 overflow-hidden relative">

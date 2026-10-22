@@ -1,5 +1,6 @@
 package com.ping.sms;
 
+import android.content.Intent;
 import android.content.res.Configuration;
 import android.os.Bundle;
 import android.view.View;
@@ -16,6 +17,35 @@ public class MainActivity extends BridgeActivity {
     // Last colours the web app asked for. Kept here so they can be put back after the screen rotates.
     private static int barBackground = 0;
     private static boolean barDark = false;
+
+    /** Which app-icon shortcut started (or re-opened) the app; the web app collects it once it has loaded. */
+    static String pendingShortcut = null;
+
+    private void handleShortcutIntent(Intent intent) {
+        if (intent == null || intent.getAction() == null) return;
+        String target = null;
+        switch (intent.getAction()) {
+            case "com.ping.sms.action.NEW_MESSAGE":
+                target = "new_message";
+                break;
+            case "com.ping.sms.action.SEARCH":
+                target = "search";
+                break;
+            case "com.ping.sms.action.PERSONAL":
+                target = "personal";
+                break;
+            case "com.ping.sms.action.TRANSACTIONS":
+                target = "transactions";
+                break;
+            default:
+                break;
+        }
+        if (target == null) return;
+        pendingShortcut = target;
+        // Handled: make sure a rotation or restart does not run it a second time
+        intent.setAction(Intent.ACTION_MAIN);
+        PingSmsPlugin.notifyShortcut(target);
+    }
 
     // Back button: only active while the web app has something to go back to (a chat, a menu, a dialog ...).
     // Otherwise Android's normal behaviour applies.
@@ -36,6 +66,14 @@ public class MainActivity extends BridgeActivity {
         applySystemBarInsets();
         reapplyBars();
         getOnBackPressedDispatcher().addCallback(this, backCallback);
+        handleShortcutIntent(getIntent());
+    }
+
+    @Override
+    public void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleShortcutIntent(intent);
     }
 
     @Override

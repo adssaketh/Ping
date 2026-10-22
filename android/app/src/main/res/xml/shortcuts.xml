@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_message"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_message"
+        android:shortcutShortLabel="@string/shortcut_new_message_short"
+        android:shortcutLongLabel="@string/shortcut_new_message_long">
+        <intent
+            android:action="com.ping.sms.action.NEW_MESSAGE"
+            android:targetPackage="com.ping.sms"
+            android:targetClass="com.ping.sms.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="search"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_search"
+        android:shortcutShortLabel="@string/shortcut_search_short"
+        android:shortcutLongLabel="@string/shortcut_search_long">
+        <intent
+            android:action="com.ping.sms.action.SEARCH"
+            android:targetPackage="com.ping.sms"
+            android:targetClass="com.ping.sms.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="personal"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_personal"
+        android:shortcutShortLabel="@string/shortcut_personal_short"
+        android:shortcutLongLabel="@string/shortcut_personal_long">
+        <intent
+            android:action="com.ping.sms.action.PERSONAL"
+            android:targetPackage="com.ping.sms"
+            android:targetClass="com.ping.sms.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="transactions"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_transactions"
+        android:shortcutShortLabel="@string/shortcut_transactions_short"
+        android:shortcutLongLabel="@string/shortcut_transactions_long">
+        <intent
+            android:action="com.ping.sms.action.TRANSACTIONS"
+            android:targetPackage="com.ping.sms"
+            android:targetClass="com.ping.sms.MainActivity" />
+    </shortcut>
+</shortcuts>

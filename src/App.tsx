@@ -11,7 +11,6 @@ import { SMSProvider, useSMS } from './context/SMSContext.tsx';
 import { TopSearchBar } from './components/TopSearchBar.tsx';
 import { ConversationList } from './components/ConversationList.tsx';
 import { ChatView } from './components/ChatView.tsx';
-import { NavigationDrawer } from './components/NavigationDrawer.tsx';
 import { NewChatModal } from './components/NewChatModal.tsx';
 import { IncomingSimulatorModal } from './components/IncomingSimulatorModal.tsx';
 import { PhoneFrameWrapper } from './components/PhoneFrameWrapper.tsx';
@@ -23,7 +22,7 @@ import { PrivacyPolicyModal } from './components/PrivacyPolicyModal.tsx';
 import { CreditsModal } from './components/CreditsModal.tsx';
 import { BottomTabs } from './components/BottomTabs.tsx';
 import { ProfilePhotoEditor } from './components/ProfilePhotoEditor.tsx';
-import { spring, useIsDesktop, useIsWide } from './motion.ts';
+import { spring, useIsDesktop } from './motion.ts';
 import { handleBackPress, useBackHandler } from './backStack.ts';
 import { smsBridge } from './services/smsBridge.ts';
 
@@ -48,7 +47,6 @@ const AppContent: React.FC = () => {
     setSearchQuery,
   } = useSMS();
 
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [shadeOpen, setShadeOpen] = useState(false);
@@ -56,28 +54,19 @@ const AppContent: React.FC = () => {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
   const isDesktop = useIsDesktop();
-  const isWide = useIsWide();
 
   const otpNotifCount = notifications.filter((n) => n.otpCode).length;
 
   // Stable callbacks: new function objects every render would defeat React.memo above
-  const openDrawer = useCallback(() => setDrawerOpen(true), []);
-  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
   const openNewChat = useCallback(() => startTransition(() => setNewChatOpen(true)), []);
   const openSimulator = useCallback(() => setSimulatorOpen(true), []);
   const openShade = useCallback(() => setShadeOpen(true), []);
   const openSettings = useCallback(() => startTransition(() => setSettingsOpen(true)), []);
-  // From the drawer: let it finish sliding away before the big Settings screen starts to open
-  const openSettingsFromDrawer = useCallback(() => {
-    setDrawerOpen(false);
-    window.setTimeout(() => startTransition(() => setSettingsOpen(true)), 200);
-  }, []);
   const openPrivacy = useCallback(() => setPrivacyOpen(true), []);
   const openCredits = useCallback(() => setCreditsOpen(true), []);
   const leaveChat = useCallback(() => selectConversation(null), [selectConversation]);
 
   // Android back button: close the top-most thing first (menu / dialog / chat / tab / search)
-  useBackHandler(drawerOpen, closeDrawer);
   useBackHandler(newChatOpen, useCallback(() => setNewChatOpen(false), []));
   useBackHandler(simulatorOpen, useCallback(() => setSimulatorOpen(false), []));
   useBackHandler(shadeOpen, useCallback(() => setShadeOpen(false), []));
@@ -87,6 +76,66 @@ const AppContent: React.FC = () => {
   useBackHandler(!!activeConversationId, leaveChat);
   useBackHandler(filter !== 'all', useCallback(() => setFilter('all'), [setFilter]));
   useBackHandler(searchQuery.trim() !== '', useCallback(() => setSearchQuery(''), [setSearchQuery]));
+
+  // App-icon shortcuts (long-press the icon): New message, Search, Personal, Transactions
+  const applyShortcut = (target: string) => {
+    // leave whatever is open, then go to the requested place
+    setNewChatOpen(false);
+    setSettingsOpen(false);
+    setPrivacyOpen(false);
+    setCreditsOpen(false);
+    setSimulatorOpen(false);
+    setShadeOpen(false);
+    selectConversation(null);
+    setSearchQuery('');
+    switch (target) {
+      case 'new_message':
+        setFilter('all');
+        window.setTimeout(() => startTransition(() => setNewChatOpen(true)), 120);
+        break;
+      case 'search':
+        setFilter('all');
+        window.setTimeout(() => {
+          const input = document.getElementById('ping-search-input') as HTMLInputElement | null;
+          input?.focus();
+          smsBridge.showKeyboard();
+        }, 350);
+        break;
+      case 'personal':
+        setFilter('personal');
+        break;
+      case 'transactions':
+        setFilter('transactions');
+        break;
+      default:
+        break;
+    }
+  };
+  const applyShortcutRef = React.useRef(applyShortcut);
+  applyShortcutRef.current = applyShortcut;
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | undefined;
+    // started from a shortcut (app was closed)
+    smsBridge.consumeLaunchShortcut().then((target) => {
+      if (target && !cancelled) applyShortcutRef.current(target);
+    });
+    // used while the app is already open
+    smsBridge
+      .listenToShortcut((target) => {
+        applyShortcutRef.current(target);
+        smsBridge.consumeLaunchShortcut();
+      })
+      .then((unsub) => {
+        if (cancelled) unsub();
+        else unsubscribe = unsub;
+      });
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,15 +160,7 @@ const AppContent: React.FC = () => {
       {/* Heads-up Android Notification Banner with Copy OTP Action */}
       <NotificationBanner />
 
-      {/* Modals and Drawers */}
-      <NavigationDrawer
-        isOpen={drawerOpen}
-        onClose={closeDrawer}
-        onOpenSimulator={openSimulator}
-        onOpenNotifications={openShade}
-        onOpenSettings={openSettingsFromDrawer}
-      />
-
+      {/* Modals */}
       <NotificationShadeModal
         isOpen={shadeOpen}
         onClose={() => setShadeOpen(false)}
@@ -164,7 +205,6 @@ const AppContent: React.FC = () => {
               transition={spring}
             >
               <TopSearchBarMemo
-                onOpenDrawer={openDrawer}
                 onOpenSettings={openSettings}
                 onOpenPrivacy={openPrivacy}
                 onOpenCredits={openCredits}
@@ -192,16 +232,6 @@ const AppContent: React.FC = () => {
           <div className="h-full w-full flex flex-col overflow-hidden">
             {/* Split Screen Area */}
             <div className="flex-1 flex overflow-hidden min-h-0 relative">
-              {/* Large tablets and desktops: permanent navigation sidebar (third pane) */}
-              {isWide && (
-                <NavigationDrawer
-                  permanent
-                  isOpen
-                  onClose={() => {}}
-                  onOpenSettings={openSettings}
-                />
-              )}
-
               {/* Left Column: Conversation list (stays underneath the chat on phones) */}
               <motion.div
                 className="w-full md:w-[360px] lg:w-[400px] xl:w-[420px] 2xl:w-[460px] shrink-0 border-r border-m3-line dark:border-m3-d4 flex flex-col h-full bg-m3-surface dark:bg-m3-d0"
@@ -212,8 +242,7 @@ const AppContent: React.FC = () => {
                 transition={spring}
               >
                 <TopSearchBarMemo
-                  onOpenDrawer={openDrawer}
-                  onOpenSimulator={openSimulator}
+                    onOpenSimulator={openSimulator}
                   onOpenNotifications={openShade}
                   onOpenSettings={openSettings}
                   onOpenPrivacy={openPrivacy}

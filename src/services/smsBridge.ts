@@ -53,6 +53,8 @@ interface PingSmsPluginInterface {
   setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
   getSystemColors(): Promise<SystemPalettes>;
   setBackEnabled(options: { enabled: boolean }): Promise<void>;
+  consumeLaunchShortcut(): Promise<{ target?: string }>;
+  showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
   saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
@@ -72,6 +74,10 @@ interface PingSmsPluginInterface {
   addListener(
     eventName: 'smsStatus',
     listenerFunc: (data: { messageId: string; status: 'sent' | 'delivered' | 'failed'; resultCode: number }) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'shortcut',
+    listenerFunc: (data: { target?: string }) => void
   ): Promise<{ remove: () => void }>;
   addListener(
     eventName: 'backPressed',
@@ -211,6 +217,43 @@ export const smsBridge = {
   /** Writes backed-up messages into the phone's SMS store (Ping must be the default SMS app). */
   async restoreDeviceSms(messages: BackupSms[]): Promise<{ inserted: number; skipped: number }> {
     return PingSms.restoreSms({ messages });
+  },
+
+  /** The app-icon shortcut that started the app, if any (returned once). */
+  async consumeLaunchShortcut(): Promise<string | null> {
+    if (!isNativeAndroid()) return null;
+    try {
+      const res = await PingSms.consumeLaunchShortcut();
+      return res && res.target ? res.target : null;
+    } catch (err) {
+      console.warn('consumeLaunchShortcut failed:', err);
+      return null;
+    }
+  },
+
+  /** Fires when an app-icon shortcut is used while the app is already open. */
+  async listenToShortcut(callback: (target: string) => void): Promise<() => void> {
+    if (!isNativeAndroid()) return () => {};
+    try {
+      const handle = await PingSms.addListener('shortcut', (data: { target?: string }) => {
+        if (data && data.target) callback(data.target);
+      });
+      return () => {
+        handle.remove();
+      };
+    } catch (err) {
+      console.warn('listenToShortcut failed:', err);
+      return () => {};
+    }
+  },
+
+  async showKeyboard(): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.showKeyboard();
+    } catch (err) {
+      console.warn('showKeyboard failed:', err);
+    }
   },
 
   /** Tells Android whether the back button has something to close inside the app. */
