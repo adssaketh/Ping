@@ -92,6 +92,14 @@ export interface SmsAppSettings {
   profileName: string;
   /** Years of older messages you loaded with "Show more" (they are loaded again on every launch) */
   loadedYears: number[];
+  /** How much messages blur as they slide under the search bar and bottom bar */
+  edgeBlurLevel: 'off' | 'light' | 'medium' | 'strong';
+  /** How tall the fade zone under the search bar / above the bottom bar is */
+  edgeFade: 'short' | 'medium' | 'tall';
+  /** Search bar and bottom bar: solid colour, or frosted glass that shows the messages through it */
+  barStyle: 'solid' | 'glass';
+  /** Older versions only had an on/off switch; still understood */
+  edgeBlur?: boolean;
   spamProtectionEnabled: boolean;
   /** How aggressively unknown senders are filtered into the Spam folder */
   spamSensitivity: 'relaxed' | 'balanced' | 'strict';

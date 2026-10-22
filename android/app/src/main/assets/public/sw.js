@@ -93,7 +93,7 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "revision": "e32a61975d568bda9b2d0959da6aca0a"
   }, {
     "url": "index.html",
-    "revision": "0d07b545dc76cb6e8e6d5366971afa34"
+    "revision": "fd391df0753ae6ccf8618f42b11cd0ba"
   }, {
     "url": "icon.svg",
     "revision": "f404d3e48a9059ccc0e5bdf6f6543b0a"
@@ -107,25 +107,25 @@ define(['./workbox-7e5eb42b'], (function (workbox) { 'use strict';
     "url": "assets/motion-C9sNGaBY.js",
     "revision": null
   }, {
-    "url": "assets/index-D_gb0i-8.css",
+    "url": "assets/index-DtmSp5Jz.css",
     "revision": null
   }, {
-    "url": "assets/index-Bg4VOaBb.js",
+    "url": "assets/index-4yXyhO5K.js",
     "revision": null
   }, {
-    "url": "assets/SettingsModal-ziDl-J1T.js",
+    "url": "assets/SettingsModal-w3GmkCE8.js",
     "revision": null
   }, {
-    "url": "assets/ProfilePhotoEditor-CMs94MWn.js",
+    "url": "assets/ProfilePhotoEditor-C4ZsbFCU.js",
     "revision": null
   }, {
-    "url": "assets/PrivacyPolicyModal-CBYJvUhz.js",
+    "url": "assets/PrivacyPolicyModal-H51-etw7.js",
     "revision": null
   }, {
-    "url": "assets/NewChatModal-BDPEEhhb.js",
+    "url": "assets/NewChatModal-C0kHsHj_.js",
     "revision": null
   }, {
-    "url": "assets/CreditsModal-CmklcZnZ.js",
+    "url": "assets/CreditsModal-V76J-EM5.js",
     "revision": null
   }, {
     "url": "assets/aistudio/IMG_20261020_172005_885679d0.png",

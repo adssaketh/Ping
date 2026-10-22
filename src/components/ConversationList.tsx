@@ -669,20 +669,6 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
   return (
     <div className="relative flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-m3-surface dark:bg-m3-d0">
-      {FOLDER_TITLES[filter] && (
-        <div className="px-4 pt-1 pb-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setFilter('all')}
-            className="flex items-center gap-2 pl-4 pr-3 py-2 rounded-full bg-m3-primary-container text-m3-on-primary-deep dark:bg-m3-primary-deep dark:text-m3-primary-container text-xs font-semibold"
-            aria-label="Back to all messages"
-          >
-            <span>{FOLDER_TITLES[filter]}</span>
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
       {pagerEnabled ? (
         /* Swipe left / right to move between All, Personal, Transactions and Promotions */
         <div ref={pagerRef} className="flex-1 min-h-0 overflow-hidden relative">
@@ -706,7 +692,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
                   ref={slot === 'cur' ? currentPaneRef : undefined}
                   onScroll={slot === 'cur' ? handleScroll : undefined}
                   aria-hidden={slot !== 'cur'}
-                  className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y pb-28 pt-1"
+                  className="w-1/3 h-full shrink-0 overflow-y-auto overscroll-x-none touch-pan-y"
+                  style={{ paddingTop: 'var(--bar-top, 4px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 24px)' }}
                 >
                   {f && (slot === 'cur' || neighborsOn) ? renderContent(f, slot === 'cur' ? visibleCount : 12) : null}
                 </div>
@@ -715,7 +702,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
           </motion.div>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto pb-28 pt-1" onScroll={handleScroll}>
+        <div
+          className="flex-1 overflow-y-auto"
+          style={{ paddingTop: 'var(--bar-top, 4px)', paddingBottom: 'calc(var(--bar-bottom, 96px) + 24px)' }}
+          onScroll={handleScroll}
+        >
           {searching ? (
             searchPending ? (
               <SkeletonList count={6} label="Searching" />
@@ -734,7 +725,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
       {/* Material 3 Expressive floating action button (icon only) */}
       <motion.div
-        className="absolute right-5 bottom-6 z-20"
+        className="absolute right-5 z-20"
         initial={{ scale: 0, rotate: -90, opacity: 0 }}
         animate={{
           scale: fabHidden ? 0.5 : 1,
@@ -743,7 +734,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
           y: fabHidden ? 28 : 0,
         }}
         transition={springBouncy}
-        style={{ pointerEvents: fabHidden ? 'none' : 'auto' }}
+        style={{ pointerEvents: fabHidden ? 'none' : 'auto', bottom: 'calc(var(--bar-bottom, 84px) + 16px)' }}
       >
         <motion.button
           type="button"

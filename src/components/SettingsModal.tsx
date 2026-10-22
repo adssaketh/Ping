@@ -34,6 +34,37 @@ import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { smsBridge } from '../services/smsBridge.ts';
 
+/** A row of pill buttons where exactly one is selected. */
+function ChoiceChips<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { id: T; label: string }[];
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onChange(o.id)}
+          aria-pressed={value === o.id}
+          className={`px-4 py-2.5 rounded-full text-xs font-semibold ${
+            value === o.id
+              ? 'bg-m3-primary-container text-m3-on-primary-deep dark:bg-m3-primary-deep dark:text-m3-primary-container'
+              : 'bg-m3-surface-hi dark:bg-m3-d3 text-m3-variant dark:text-m3-variant-dk'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -485,6 +516,57 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   }`}
                 />
               </button>
+            </div>
+
+            {/* Bars & scrolling */}
+            <div className="space-y-4 pt-3 border-t border-m3-line dark:border-m3-d4">
+              <div>
+                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Blur under the bars</p>
+                <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
+                  How much messages blur as they slide under the search bar and bottom bar. Pick Off if scrolling feels slow.
+                </p>
+                <ChoiceChips
+                  value={settings.edgeBlurLevel ?? (settings.edgeBlur === false ? 'off' : 'medium')}
+                  options={[
+                    { id: 'off', label: 'Off' },
+                    { id: 'light', label: 'Light' },
+                    { id: 'medium', label: 'Medium' },
+                    { id: 'strong', label: 'Strong' },
+                  ]}
+                  onChange={(v) => updateSettings({ edgeBlurLevel: v, edgeBlur: undefined })}
+                />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Fade height</p>
+                <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
+                  How far from the bars messages start to fade away.
+                </p>
+                <ChoiceChips
+                  value={settings.edgeFade ?? 'medium'}
+                  options={[
+                    { id: 'short', label: 'Short' },
+                    { id: 'medium', label: 'Medium' },
+                    { id: 'tall', label: 'Tall' },
+                  ]}
+                  onChange={(v) => updateSettings({ edgeFade: v })}
+                />
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Bar style</p>
+                <p className="text-xs text-m3-outline dark:text-m3-outline-dk mb-2.5">
+                  Solid colour, or frosted glass that lets messages show through (uses a little more battery).
+                </p>
+                <ChoiceChips
+                  value={settings.barStyle ?? 'solid'}
+                  options={[
+                    { id: 'solid', label: 'Solid' },
+                    { id: 'glass', label: 'Glass' },
+                  ]}
+                  onChange={(v) => updateSettings({ barStyle: v })}
+                />
+              </div>
             </div>
           </div>
 

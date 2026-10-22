@@ -51,6 +51,12 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   const [menuOpen, setMenuOpen] = useState(false);
   useBackHandler(menuOpen, () => setMenuOpen(false));
 
+  const FOLDER_LABELS: Partial<Record<FilterCategory, string>> = {
+    starred: 'Starred',
+    archived: 'Archived',
+    spam: 'Spam',
+    blocked: 'Blocked',
+  };
   const unreadTotal = conversations.filter((c) => c.unreadCount > 0 && !c.isArchived && !c.isBlocked).length;
   const archivedCount = conversations.filter((c) => c.isArchived).length;
   const blockedCount = conversations.filter((c) => c.isBlocked).length;
@@ -75,10 +81,14 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
   ];
 
   return (
-    <div className="px-4 pt-3 pb-2 shrink-0">
+    <div className="px-4 pt-3 pb-2 shrink-0 pointer-events-none">
       {/* Material 3 Search Bar */}
       <motion.div
-        className="relative flex items-center h-14 px-3 rounded-full bg-m3-surface-hi dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition focus-within:bg-white dark:focus-within:bg-m3-d3 focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md"
+        className={`pointer-events-auto relative flex items-center h-14 px-3 rounded-full ${
+          settings.barStyle === 'glass'
+            ? 'bg-m3-surface-hi/60 dark:bg-m3-d2/60 backdrop-blur-xl'
+            : 'bg-m3-surface-hi dark:bg-m3-d2'
+        } text-m3-on-surface dark:text-m3-on-surface-dk shadow-sm transition ${settings.barStyle === 'glass' ? '' : 'focus-within:bg-white dark:focus-within:bg-m3-d3'} focus-within:ring-2 focus-within:ring-m3-primary/30 dark:focus-within:ring-m3-primary-light/30 focus-within:shadow-md`}
         initial={{ opacity: 0, y: -12, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={spring}
@@ -256,6 +266,19 @@ export const TopSearchBar: React.FC<TopSearchBarProps> = ({
         </div>
       </motion.div>
 
+      {FOLDER_LABELS[filter] && (
+        <div className="pt-2 flex pointer-events-auto">
+          <button
+            type="button"
+            onClick={() => setFilter('all')}
+            className="flex items-center gap-2 pl-4 pr-3 py-2 rounded-full bg-m3-primary-container text-m3-on-primary-deep dark:bg-m3-primary-deep dark:text-m3-primary-container text-xs font-semibold shadow-sm"
+            aria-label="Back to all messages"
+          >
+            <span>{FOLDER_LABELS[filter]}</span>
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

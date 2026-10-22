@@ -17,6 +17,7 @@ import { NotificationBanner } from './components/NotificationBanner.tsx';
 import { NotificationShadeModal } from './components/NotificationShadeModal.tsx';
 import { PWAInstallButton } from './components/PWAInstallButton.tsx';
 import { BottomTabs } from './components/BottomTabs.tsx';
+import { InboxColumn } from './components/InboxColumn.tsx';
 import { spring, useIsDesktop } from './motion.ts';
 import { handleBackPress, useBackHandler } from './backStack.ts';
 import { smsBridge } from './services/smsBridge.ts';
@@ -24,7 +25,7 @@ import { smsBridge } from './services/smsBridge.ts';
 // Big screens that are not needed to show the inbox are loaded the first time they open
 // (and fetched in the background shortly after launch), which makes the app start faster.
 function lazyScreen<T extends React.ComponentType<any>>(load: () => Promise<{ default: T }>): React.FC<React.ComponentProps<T>> {
-  const Screen = React.lazy(load as () => Promise<{ default: React.ComponentType<any> }>);
+  const Screen = React.lazy(load as any);
   return (props: React.ComponentProps<T>) => (
     <React.Suspense fallback={null}>
       <Screen {...props} />
@@ -231,13 +232,17 @@ const AppContent: React.FC = () => {
               animate={{ x: activeConversationId ? -32 : 0, opacity: activeConversationId ? 0.55 : 1 }}
               transition={spring}
             >
-              <TopSearchBarMemo
-                onOpenSettings={openSettings}
-                onOpenPrivacy={openPrivacy}
-                onOpenCredits={openCredits}
+              <InboxColumn
+                top={
+                  <TopSearchBarMemo
+                    onOpenSettings={openSettings}
+                    onOpenPrivacy={openPrivacy}
+                    onOpenCredits={openCredits}
+                  />
+                }
+                list={<ConversationListMemo onStartChat={openNewChat} />}
+                bottom={<BottomTabsMemo />}
               />
-              <ConversationListMemo onStartChat={openNewChat} />
-              <BottomTabsMemo />
             </motion.div>
             <AnimatePresence initial={false}>
               {activeConversationId && (
@@ -268,15 +273,19 @@ const AppContent: React.FC = () => {
                 }}
                 transition={spring}
               >
-                <TopSearchBarMemo
-                    onOpenSimulator={openSimulator}
-                  onOpenNotifications={openShade}
-                  onOpenSettings={openSettings}
-                  onOpenPrivacy={openPrivacy}
-                  onOpenCredits={openCredits}
+                <InboxColumn
+                  top={
+                    <TopSearchBarMemo
+                      onOpenSimulator={openSimulator}
+                      onOpenNotifications={openShade}
+                      onOpenSettings={openSettings}
+                      onOpenPrivacy={openPrivacy}
+                      onOpenCredits={openCredits}
+                    />
+                  }
+                  list={<ConversationListMemo onStartChat={openNewChat} />}
+                  bottom={<BottomTabsMemo />}
                 />
-                <ConversationListMemo onStartChat={openNewChat} />
-                <BottomTabsMemo />
               </motion.div>
 
               {/* Right Column: chat slides over the list on phones, sits beside it on larger screens */}

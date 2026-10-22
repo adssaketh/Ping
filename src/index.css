@@ -10,6 +10,16 @@
  *  them at runtime with tones taken from the phone's wallpaper colours
  *  (see src/theme/dynamicColor.ts), so everything re-tints automatically.
  * ------------------------------------------------------------------ */
+/* Page colour used to fade messages out under the top and bottom bars (follows light / dark / wallpaper colours) */
+:root {
+  --fade-solid: color-mix(in oklab, var(--c-surface) 94%, transparent);
+  --fade-mid: color-mix(in oklab, var(--c-surface) 62%, transparent);
+}
+html.dark {
+  --fade-solid: color-mix(in oklab, var(--c-d0) 94%, transparent);
+  --fade-mid: color-mix(in oklab, var(--c-d0) 62%, transparent);
+}
+
 :root {
   --c-primary: #0B57D0;
   --c-primary-hover: #0842A0;
