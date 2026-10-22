@@ -98,6 +98,12 @@ export interface SmsAppSettings {
   edgeFade: 'short' | 'medium' | 'tall';
   /** Search bar and bottom bar: solid colour, or frosted glass that shows the messages through it */
   barStyle: 'solid' | 'glass';
+  /** Glass bars: how much of the bar's colour is kept (the rest is see-through), 20 to 95 */
+  glassOpacity: number;
+  /** Glass bars: how strongly the messages behind are blurred */
+  glassBlur: 'soft' | 'medium' | 'strong';
+  /** Glass bars: a thin light edge, like the rim of real glass */
+  glassBorder: boolean;
   /** Older versions only had an on/off switch; still understood */
   edgeBlur?: boolean;
   spamProtectionEnabled: boolean;
