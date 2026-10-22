@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { animate, motion, useMotionValue, PanInfo } from 'motion/react';
 import { spring, springBouncy, springSoft } from '../motion.ts';
 import { LatestMessageCard } from './LatestMessageCard.tsx';
+import { AvatarCircle } from './AvatarCircle.tsx';
 import { ConversationActionSheet } from './ConversationActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
@@ -39,6 +40,7 @@ interface ConversationRowProps {
   index: number;
   isSelected: boolean;
   isSpam: boolean;
+  photo?: string;
   introDone: boolean;
   onOpen: (id: string) => void;
   onPin: (id: string) => void;
@@ -54,6 +56,7 @@ const ConversationRow = React.memo(function ConversationRow({
   index,
   isSelected,
   isSpam,
+  photo,
   introDone,
   onOpen,
   onPin,
@@ -84,11 +87,12 @@ const ConversationRow = React.memo(function ConversationRow({
       >
         {/* Avatar */}
         <div className="relative shrink-0">
-          <div
+          <AvatarCircle
+            photo={photo}
             className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm ${conv.avatarColor} text-white shadow-xs`}
           >
             {initials}
-          </div>
+          </AvatarCircle>
           {conv.isPinned && (
             <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-white dark:bg-m3-d2 flex items-center justify-center shadow-xs border border-m3-line dark:border-m3-d4">
               <Pin className="w-2.5 h-2.5 text-m3-primary dark:text-m3-primary-light fill-current" />
@@ -224,6 +228,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     setFilter,
     settings,
     spamConversationIds,
+    getContactPhoto,
   } = useSMS();
 
   // The floating button tucks away while you scroll down and returns when you scroll up
@@ -428,6 +433,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
       index={index}
       isSelected={activeConversationId === conv.id}
       isSpam={spamConversationIds.has(conv.id)}
+      photo={getContactPhoto(conv.phoneNumber)}
       introDone={introDone}
       onOpen={onOpenRow}
       onPin={onPinRow}
@@ -573,6 +579,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
               <LatestMessageCard
                 key={featured.id}
                 conversation={featured}
+                photo={getContactPhoto(featured.phoneNumber)}
                 message={featuredMessage}
                 onOpen={() => {
                   if (consumePressClick()) return;

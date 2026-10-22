@@ -20,6 +20,9 @@ export interface Contact {
   phoneNumber: string;
   avatarColor: string;
   initials: string;
+  /** id of this contact on the phone (used to fetch its picture) */
+  deviceContactId?: string;
+  photoFileId?: string;
 }
 
 export interface Conversation {

@@ -97,6 +97,8 @@ interface SMSContextType {
     spam: number;
   };
   // Spam protection
+  /** Profile picture of the saved contact with this number (from Google Contacts), if it has one */
+  getContactPhoto: (number: string) => string | undefined;
   /** true when this number is already saved in your contacts (in any format) */
   isContactNumber: (number: string) => boolean;
   /** Opens the contacts app to save this number, then refreshes names in Ping */
@@ -156,6 +158,7 @@ const STORAGE_KEYS = {
   MESSAGES: 'gm_sms_messages_v2',
   CONTACTS: 'gm_sms_contacts_v2',
   SETTINGS: 'gm_sms_settings_v2',
+  CONTACT_PHOTOS: 'gm_sms_contact_photos_v1',
 };
 
 /** Writes `value` to localStorage 400ms after it last changed, and immediately when the app is hidden. */
@@ -195,6 +198,19 @@ function useDebouncedPersist(key: string, value: unknown, delayMs = 400) {
 }
 
 const DEVICE_ID_PREFIX = 'm-dev-';
+
+/** Turns a contact read from the phone into Ping's contact (one entry per number). */
+function contactFromDevice(dc: NativeContact): Contact {
+  return {
+    id: `contact-${dc.id || ''}-${phoneKey(dc.phoneNumber)}`,
+    name: dc.name || dc.phoneNumber,
+    phoneNumber: dc.phoneNumber,
+    avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
+    initials: getInitials(dc.name, dc.phoneNumber),
+    deviceContactId: dc.id,
+    photoFileId: dc.photoFileId || (dc.photoUri ? '1' : ''),
+  };
+}
 
 /** Removes a message that was imported from the phone's SMS store (only works while Ping is the default SMS app). */
 const deleteFromDevice = (m: Message) => {
@@ -530,6 +546,19 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveBanner(null);
   };
 
+  // Profile pictures synced from the phone (Google Contacts), by the contact's id on the phone
+  const [contactPhotos, setContactPhotos] = useState<Record<string, { fileId: string; data: string }>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CONTACT_PHOTOS);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  useDebouncedPersist(STORAGE_KEYS.CONTACT_PHOTOS, contactPhotos);
+  const contactPhotosRef = useRef(contactPhotos);
+  contactPhotosRef.current = contactPhotos;
+
   // Contacts by number key: 9494202618, +919494202618 and 919494202618 are all the same person
   const contactByKey = useMemo(() => {
     const map = new Map<string, Contact>();
@@ -539,6 +568,20 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return map;
   }, [contacts]);
+  const photoByKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of contacts) {
+      if (!c.deviceContactId) continue;
+      const photo = contactPhotos[c.deviceContactId];
+      const key = phoneKey(c.phoneNumber);
+      if (photo && key && !map.has(key)) map.set(key, photo.data);
+    }
+    return map;
+  }, [contacts, contactPhotos]);
+  const getContactPhoto = useCallback(
+    (number: string): string | undefined => (isPhoneNumber(number) ? photoByKey.get(phoneKey(number)) : undefined),
+    [photoByKey]
+  );
   const contactForNumber = (number: string): Contact | undefined =>
     isPhoneNumber(number) ? contactByKey.get(phoneKey(number)) : undefined;
 
@@ -1342,13 +1385,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const deviceContacts = await smsBridge.readDeviceContacts();
       if (deviceContacts && deviceContacts.length > 0) {
-        const fromDevice: Contact[] = deviceContacts.map((dc) => ({
-          id: `contact-${dc.id || phoneKey(dc.phoneNumber)}`,
-          name: dc.name || dc.phoneNumber,
-          phoneNumber: dc.phoneNumber,
-          avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
-          initials: getInitials(dc.name, dc.phoneNumber),
-        }));
+        const fromDevice: Contact[] = deviceContacts.map(contactFromDevice);
+        void refreshContactPhotos(deviceContacts);
         setContacts((prev) => {
           const deviceKeys = new Set(fromDevice.map((c) => phoneKey(c.phoneNumber)));
           const manual = prev.filter((c) => c.id.startsWith('contact-web-') && !deviceKeys.has(phoneKey(c.phoneNumber)));
@@ -1369,6 +1407,45 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lastSyncSignature = useRef('');
   const lastContactsSignature = useRef('');
   const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+  // Fetch the pictures that are new or changed, 20 at a time, without blocking the screen
+  const refreshContactPhotos = useCallback(async (list: NativeContact[]) => {
+    const wanted = new Map<string, string>();
+    for (const c of list) {
+      if (c.id && (c.photoFileId || c.photoUri) && !wanted.has(c.id)) wanted.set(c.id, c.photoFileId || '1');
+    }
+    const have = contactPhotosRef.current;
+    const todo: string[] = [];
+    wanted.forEach((fileId, id) => {
+      if (!have[id] || have[id].fileId !== fileId) todo.push(id);
+    });
+    // forget pictures of contacts that were deleted or lost their photo
+    const stale = Object.keys(have).filter((id) => !wanted.has(id));
+    if (stale.length > 0) {
+      setContactPhotos((prev) => {
+        const next = { ...prev };
+        stale.forEach((id) => delete next[id]);
+        return next;
+      });
+    }
+    for (let i = 0; i < todo.length && i < 600; i += 20) {
+      const batch = todo.slice(i, i + 20);
+      try {
+        const got = await smsBridge.readContactPhotos(batch);
+        setContactPhotos((prev) => {
+          const next = { ...prev };
+          for (const id of batch) {
+            if (got[id]) next[id] = { fileId: wanted.get(id) || '', data: got[id] };
+          }
+          return next;
+        });
+      } catch (err) {
+        console.warn('Could not read contact pictures:', err);
+        break;
+      }
+      await nextTick();
+    }
+  }, []);
 
   const syncDeviceSmsAndContacts = useCallback(async () => {
     setIsSyncingDevice(true);
@@ -1391,19 +1468,14 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // changes whenever a contact is added, renamed or removed
         let hash = 5381;
         for (const c of contactList) {
-          const part = `${c.id}|${c.name}|${c.phoneNumber};`;
+          const part = `${c.id}|${c.name}|${c.phoneNumber}|${c.photoFileId || (c.photoUri ? '1' : '')};`;
           for (let i = 0; i < part.length; i++) hash = ((hash << 5) + hash + part.charCodeAt(i)) | 0;
         }
         const contactsSignature = `${contactList.length}:${hash}`;
         if (contactsSignature !== lastContactsSignature.current) {
           lastContactsSignature.current = contactsSignature;
-          const fromDevice: Contact[] = contactList.map((dc) => ({
-            id: `contact-${dc.id || phoneKey(dc.phoneNumber)}`,
-            name: dc.name || dc.phoneNumber,
-            phoneNumber: dc.phoneNumber,
-            avatarColor: getAvatarColorClasses(dc.name || dc.phoneNumber),
-            initials: getInitials(dc.name, dc.phoneNumber),
-          }));
+          const fromDevice: Contact[] = contactList.map(contactFromDevice);
+          void refreshContactPhotos(contactList);
           // the phone's contacts replace the old list (no leftovers or duplicates); contacts added by hand stay
           startTransition(() =>
             setContacts((prev) => {
@@ -1717,6 +1789,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateSettings,
     categoryCounts,
     spamConversationIds,
+    getContactPhoto,
     isContactNumber,
     addNumberToContacts,
     unreadCounts,

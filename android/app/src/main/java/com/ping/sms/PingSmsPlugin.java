@@ -5,12 +5,16 @@ import android.app.Activity;
 import android.app.role.RoleManager;
 import android.content.ContentResolver;
 import android.content.ContentValues;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.database.Cursor;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Base64;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.ContactsContract;
@@ -132,6 +136,74 @@ public class PingSmsPlugin extends Plugin {
         if (call == null) return;
         JSObject ret = new JSObject();
         ret.put("done", true);
+        call.resolve(ret);
+    }
+
+    /**
+     * Returns small square profile pictures (as JPEG data URLs) for the given contact IDs. These are the photos
+     * Google Contacts syncs to the phone; contacts without a photo are simply left out.
+     */
+    @PluginMethod
+    public void readContactPhotos(PluginCall call) {
+        Context context = getContext();
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_CONTACTS permission is required");
+            return;
+        }
+        JSArray ids = call.getArray("ids");
+        Integer sizeParam = call.getInt("size", 128);
+        final int size = sizeParam == null ? 128 : Math.max(48, Math.min(256, sizeParam));
+        JSObject photos = new JSObject();
+        if (ids != null) {
+            ContentResolver cr = context.getContentResolver();
+            for (int i = 0; i < ids.length(); i++) {
+                String id = ids.optString(i, "");
+                if (id.isEmpty()) continue;
+                Bitmap source = null;
+                Bitmap square = null;
+                Bitmap scaled = null;
+                try {
+                    Uri contactUri = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI, Long.parseLong(id));
+                    byte[] data;
+                    try (InputStream in = ContactsContract.Contacts.openContactPhotoInputStream(cr, contactUri, true)) {
+                        if (in == null) continue;
+                        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+                        byte[] chunk = new byte[8192];
+                        int read;
+                        long total = 0;
+                        while ((read = in.read(chunk)) != -1) {
+                            total += read;
+                            if (total > 4L * 1024 * 1024) break;
+                            buffer.write(chunk, 0, read);
+                        }
+                        data = buffer.toByteArray();
+                    }
+                    BitmapFactory.Options bounds = new BitmapFactory.Options();
+                    bounds.inJustDecodeBounds = true;
+                    BitmapFactory.decodeByteArray(data, 0, data.length, bounds);
+                    int sample = 1;
+                    while (bounds.outWidth / (sample * 2) >= size && bounds.outHeight / (sample * 2) >= size) sample *= 2;
+                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                    opts.inSampleSize = sample;
+                    source = BitmapFactory.decodeByteArray(data, 0, data.length, opts);
+                    if (source == null) continue;
+                    int side = Math.min(source.getWidth(), source.getHeight());
+                    square = Bitmap.createBitmap(source, (source.getWidth() - side) / 2, (source.getHeight() - side) / 2, side, side);
+                    scaled = Bitmap.createScaledBitmap(square, size, size, true);
+                    ByteArrayOutputStream out = new ByteArrayOutputStream();
+                    scaled.compress(Bitmap.CompressFormat.JPEG, 82, out);
+                    photos.put(id, "data:image/jpeg;base64," + Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP));
+                } catch (Exception ignored) {
+                    // a contact whose photo cannot be read just keeps its initials
+                } finally {
+                    if (scaled != null && scaled != square) scaled.recycle();
+                    if (square != null && square != source) square.recycle();
+                    if (source != null) source.recycle();
+                }
+            }
+        }
+        JSObject ret = new JSObject();
+        ret.put("photos", photos);
         call.resolve(ret);
     }
 
@@ -609,6 +681,7 @@ public class PingSmsPlugin extends Plugin {
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                 ContactsContract.CommonDataKinds.Phone.NUMBER,
                 ContactsContract.CommonDataKinds.Phone.PHOTO_URI,
+                ContactsContract.CommonDataKinds.Phone.PHOTO_FILE_ID,
                 ContactsContract.CommonDataKinds.Phone.TYPE
             };
 
@@ -620,6 +693,8 @@ public class PingSmsPlugin extends Plugin {
                     String name = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME));
                     String number = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER));
                     String photoUri = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.PHOTO_URI));
+                    int fileIdIndex = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.PHOTO_FILE_ID);
+                    String photoFileId = fileIdIndex >= 0 && !cursor.isNull(fileIdIndex) ? cursor.getString(fileIdIndex) : "";
 
                     if (number != null && !number.trim().isEmpty()) {
                         JSObject contactObj = new JSObject();
@@ -627,6 +702,7 @@ public class PingSmsPlugin extends Plugin {
                         contactObj.put("name", name != null ? name : number);
                         contactObj.put("phoneNumber", number.replaceAll("\\s+", ""));
                         contactObj.put("photoUri", photoUri != null ? photoUri : "");
+                        contactObj.put("photoFileId", photoFileId);
                         contactsArray.put(contactObj);
                     }
                 }

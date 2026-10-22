@@ -65,15 +65,33 @@ jobs:
         run: rm -f android/app/src/main/res/mipmap-anydpi-v26/*.png
 
       - name: Build Android APK
+        id: build
         working-directory: android
+        env:
+          PING_KEYSTORE_BASE64: ${{ secrets.PING_KEYSTORE_BASE64 }}
+          PING_KEYSTORE_PASSWORD: ${{ secrets.PING_KEYSTORE_PASSWORD }}
+          PING_KEY_ALIAS: ${{ secrets.PING_KEY_ALIAS }}
+          PING_KEY_PASSWORD: ${{ secrets.PING_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
+          if [ -n "$PING_KEYSTORE_BASE64" ]; then
+            # Your signing key is set up: build a fast, signed release APK that can update the installed app
+            echo "$PING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ping-release.jks"
+            export PING_KEYSTORE_PATH="$RUNNER_TEMP/ping-release.jks"
+            ./gradlew assembleRelease --no-daemon
+            echo "apk=android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_OUTPUT"
+            echo "name=ping-sms-signed-apk" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing key found (see SIGNING.md): building a debug APK instead."
+            ./gradlew assembleDebug --no-daemon
+            echo "apk=android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_OUTPUT"
+            echo "name=ping-sms-debug-apk" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: ping-sms-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ${{ steps.build.outputs.name }}
+          path: ${{ steps.build.outputs.apk }}
           if-no-files-found: error
           retention-days: 30

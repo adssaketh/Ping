@@ -38,6 +38,7 @@ import { MessageActionSheet } from './MessageActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
 import { isPhoneNumber } from '../utils/phone.ts';
+import { AvatarCircle } from './AvatarCircle.tsx';
 
 interface ChatViewProps {
   onBack: () => void;
@@ -64,6 +65,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     isNativePlatform,
     isContactNumber,
     addNumberToContacts,
+    getContactPhoto,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -237,11 +239,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             className="flex items-center gap-2.5 cursor-pointer p-1 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 truncate"
             onClick={() => setInfoModalOpen(true)}
           >
-            <div
+            <AvatarCircle
+              photo={getContactPhoto(activeConversation.phoneNumber)}
               className={`w-10 h-10 rounded-full flex items-center justify-center font-semibold text-xs ${activeConversation.avatarColor} text-white shadow-xs shrink-0`}
             >
               {getInitials(activeConversation.contactName, activeConversation.phoneNumber)}
-            </div>
+            </AvatarCircle>
             <div className="truncate text-left">
               <h2 className="text-sm font-semibold text-m3-on-surface dark:text-white truncate">
                 {activeConversation.contactName}
@@ -448,11 +451,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
 
         {/* Top Info Banner */}
         <div className="text-center py-4">
-          <div
+          <AvatarCircle
+            photo={getContactPhoto(activeConversation.phoneNumber)}
             className={`w-16 h-16 rounded-full mx-auto flex items-center justify-center font-bold text-lg ${activeConversation.avatarColor} text-white shadow-sm mb-2`}
           >
             {getInitials(activeConversation.contactName, activeConversation.phoneNumber)}
-          </div>
+          </AvatarCircle>
           <h3 className="text-base font-semibold text-m3-on-surface dark:text-white">
             {activeConversation.contactName}
           </h3>
@@ -724,11 +728,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             exit={{ opacity: 0, scale: 0.94 }}
             transition={springBouncy}
             className="relative w-full max-w-sm bg-white dark:bg-m3-d2 rounded-3xl p-6 shadow-2xl border border-m3-line dark:border-m3-d4 z-50 text-center">
-            <div
+            <AvatarCircle
+              photo={getContactPhoto(activeConversation.phoneNumber)}
               className={`w-20 h-20 rounded-full mx-auto flex items-center justify-center font-bold text-2xl ${activeConversation.avatarColor} text-white shadow-md mb-3`}
             >
               {getInitials(activeConversation.contactName, activeConversation.phoneNumber)}
-            </div>
+            </AvatarCircle>
             <h3 className="text-lg font-bold text-m3-on-surface dark:text-white">
               {activeConversation.contactName}
             </h3>

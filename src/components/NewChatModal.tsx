@@ -5,6 +5,7 @@ import { Search, X, UserPlus, Phone, ArrowRight, RefreshCw } from 'lucide-react'
 import { useSMS } from '../context/SMSContext.tsx';
 import { getInitials } from '../utils/smsUtils.ts';
 import { searchContacts } from '../utils/contactSearch.ts';
+import { AvatarCircle } from './AvatarCircle.tsx';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
     importWebContact,
     syncDeviceContacts,
     isSyncingDevice,
+    getContactPhoto,
   } = useSMS();
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(40);
@@ -179,11 +181,12 @@ export const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose }) =
                 onClick={() => handleSelectContact(contact.name, contact.phoneNumber)}
                 className="w-full flex items-center gap-3.5 p-3 rounded-2xl hover:bg-m3-surface-hi dark:hover:bg-m3-d2 transition-colors text-left"
               >
-                <div
+                <AvatarCircle
+                  photo={getContactPhoto(contact.phoneNumber)}
                   className={`w-11 h-11 rounded-full flex items-center justify-center font-semibold text-sm ${contact.avatarColor} text-white shadow-xs shrink-0`}
                 >
                   {contact.initials}
-                </div>
+                </AvatarCircle>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-m3-on-surface dark:text-white truncate">
                     {contact.name}

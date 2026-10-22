@@ -24,6 +24,8 @@ export interface NativeContact {
   name: string;
   phoneNumber: string;
   photoUri?: string;
+  /** changes whenever the contact's photo changes */
+  photoFileId?: string;
 }
 
 export interface PermissionsStatus {
@@ -55,6 +57,7 @@ interface PingSmsPluginInterface {
   setBackEnabled(options: { enabled: boolean }): Promise<void>;
   consumeLaunchShortcut(): Promise<{ target?: string }>;
   addContact(options: { phoneNumber: string; name?: string }): Promise<{ done: boolean }>;
+  readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
   showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
   saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
@@ -218,6 +221,13 @@ export const smsBridge = {
   /** Writes backed-up messages into the phone's SMS store (Ping must be the default SMS app). */
   async restoreDeviceSms(messages: BackupSms[]): Promise<{ inserted: number; skipped: number }> {
     return PingSms.restoreSms({ messages });
+  },
+
+  /** Profile pictures (as small data URLs) for the given contact IDs; the ones Google Contacts syncs to the phone. */
+  async readContactPhotos(ids: string[], size = 128): Promise<Record<string, string>> {
+    if (!isNativeAndroid() || ids.length === 0) return {};
+    const res = await PingSms.readContactPhotos({ ids, size });
+    return (res && res.photos) || {};
   },
 
   /** Opens Android's contacts app with this number filled in (save as new or add to an existing contact). */

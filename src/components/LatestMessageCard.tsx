@@ -5,11 +5,13 @@ import { Conversation, Message } from '../types.ts';
 import { extractOtpCode, formatFullDateTime, getInitials } from '../utils/smsUtils.ts';
 import { springBouncy } from '../motion.ts';
 import { copyText } from '../utils/clipboard.ts';
+import { AvatarCircle } from './AvatarCircle.tsx';
 import type { PressHandlers } from '../utils/useLongPress.ts';
 
 interface LatestMessageCardProps {
   conversation: Conversation;
   message: Message;
+  photo?: string;
   onOpen: () => void;
   /** Long-press handlers from the list, spread onto the card */
   pressProps?: PressHandlers;
@@ -26,7 +28,7 @@ const CATEGORY_LABEL: Record<string, string> = {
  * The newest message that arrived, shown larger than the rest of the list with its full text,
  * sender details and, for one-time codes, Copy OTP / Copy message buttons.
  */
-export const LatestMessageCard: React.FC<LatestMessageCardProps> = ({ conversation, message, onOpen, pressProps }) => {
+export const LatestMessageCard: React.FC<LatestMessageCardProps> = ({ conversation, message, photo, onOpen, pressProps }) => {
   const [copied, setCopied] = useState<'otp' | 'message' | null>(null);
   const otp = extractOtpCode(message.text);
   const isFresh = Date.now() - message.timestamp < 8000; // only animate a message that just arrived
@@ -52,11 +54,12 @@ export const LatestMessageCard: React.FC<LatestMessageCardProps> = ({ conversati
     >
       {/* Who and when */}
       <div className="flex items-center gap-3.5">
-        <div
+        <AvatarCircle
+          photo={photo}
           className={`w-14 h-14 rounded-full flex items-center justify-center font-bold text-base ${conversation.avatarColor} text-white shadow-xs shrink-0`}
         >
           {initials}
-        </div>
+        </AvatarCircle>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-bold truncate text-m3-on-surface dark:text-white">

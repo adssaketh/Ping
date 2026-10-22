@@ -19,6 +19,7 @@ import {
 import { useSMS } from '../context/SMSContext.tsx';
 import { extractOtpCode, getInitials } from '../utils/smsUtils.ts';
 import { copyText } from '../utils/clipboard.ts';
+import { AvatarCircle } from './AvatarCircle.tsx';
 import { isPhoneNumber } from '../utils/phone.ts';
 import { spring, fadeFast } from '../motion.ts';
 
@@ -52,6 +53,7 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
     isNativePlatform,
     isContactNumber,
     addNumberToContacts,
+    getContactPhoto,
   } = useSMS();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -174,11 +176,12 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
 
             {/* Who this is */}
             <div className="px-5 pt-2 pb-3 flex items-center gap-3.5">
-              <div
+              <AvatarCircle
+                photo={getContactPhoto(conv.phoneNumber)}
                 className={`w-12 h-12 rounded-full flex items-center justify-center font-semibold text-sm ${conv.avatarColor} text-white shrink-0`}
               >
                 {getInitials(conv.contactName, conv.phoneNumber)}
-              </div>
+              </AvatarCircle>
               <div className="min-w-0">
                 <p className="text-base font-semibold truncate text-m3-on-surface dark:text-white">{conv.contactName}</p>
                 {conv.phoneNumber && conv.phoneNumber !== conv.contactName && (
