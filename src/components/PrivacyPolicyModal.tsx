@@ -64,7 +64,7 @@ const SECTIONS: { icon: React.ElementType; title: string; body: React.ReactNode 
       <p>
         Your messages already live in Android&rsquo;s own message store. To open quickly, Ping also keeps a working
         copy of your conversations, contacts, starred messages, drafts, settings, your profile picture (if you add
-        one) and your contacts' pictures in the app&rsquo;s private storage on this phone. Ping is excluded from Android cloud backup, so this copy is not uploaded with your
+        one), your contacts' pictures and pictures you add for businesses in the app&rsquo;s private storage on this phone. Ping is excluded from Android cloud backup, so this copy is not uploaded with your
         phone backup. If you use Back up SMS in Settings, the file is saved where you choose. It contains your messages
         in plain, unencrypted text, so keep it somewhere safe.
       </p>

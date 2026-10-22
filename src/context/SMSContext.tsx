@@ -11,7 +11,7 @@ import {
 import { INITIAL_CONVERSATIONS, INITIAL_MESSAGES, INITIAL_CONTACTS } from '../utils/seedData.ts';
 import { applyPalette, SystemPalettes } from '../theme/dynamicColor.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
-import { isPhoneNumber, phoneKey } from '../utils/phone.ts';
+import { businessKey, isPhoneNumber, phoneKey } from '../utils/phone.ts';
 import { dedupeContacts } from '../utils/contactSearch.ts';
 import {
   loadSpamModel,
@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   profilePhoto: null,
   profilePhotoSource: null,
   profileName: '',
-  loadFullHistory: false,
+  loadedYears: [],
   spamProtectionEnabled: true,
   spamSensitivity: 'balanced',
   spamAllow: [],
@@ -79,7 +79,7 @@ interface SMSContextType {
   checkDefaultSmsApp: () => Promise<void>;
   requestDefaultSmsApp: () => Promise<boolean>;
   requestPermissions: () => Promise<void>;
-  syncDeviceSmsAndContacts: (opts?: { full?: boolean }) => Promise<{ smsCount: number; contactCount: number }>;
+  syncDeviceSmsAndContacts: (opts?: { years?: number[] }) => Promise<{ smsCount: number; contactCount: number }>;
   syncDeviceContacts: () => Promise<number>;
   importWebContact: () => Promise<Contact | null>;
   
@@ -100,6 +100,8 @@ interface SMSContextType {
   // Spam protection
   /** Profile picture of the saved contact with this number (from Google Contacts), if it has one */
   getContactPhoto: (number: string) => string | undefined;
+  /** Set (or with null remove) the picture of a business, by its business key (see businessKey()) */
+  setBusinessPhoto: (key: string, data: string | null) => void;
   /** true when this number is already saved in your contacts (in any format) */
   isContactNumber: (number: string) => boolean;
   /** Opens the contacts app to save this number, then refreshes names in Ping */
@@ -111,9 +113,15 @@ interface SMSContextType {
   /** Message to scroll to (and flash) when a chat opens from a search result */
   jumpToMessageId: string | null;
   /** true once every message on the phone has been loaded */
-  historyLoaded: boolean;
-  isLoadingHistory: boolean;
-  loadFullHistory: () => Promise<void>;
+  /** true when the phone may hold more messages than the first 200 that Ping shows */
+  olderAvailable: boolean;
+  /** Messages per year on the phone (null until asked) */
+  yearCounts: { year: number; count: number }[] | null;
+  loadedYears: number[];
+  loadingYear: number | null;
+  loadingYearCounts: boolean;
+  fetchYearCounts: () => Promise<void>;
+  loadYear: (year: number) => Promise<void>;
   setJumpToMessageId: (id: string | null) => void;
   unreadCounts: { all: number; personal: number; transactions: number; services: number; promotions: number };
   isSpamConversation: (conversationId: string) => boolean;
@@ -170,6 +178,7 @@ const STORAGE_KEYS = {
   CONTACTS: 'gm_sms_contacts_v2',
   SETTINGS: 'gm_sms_settings_v2',
   CONTACT_PHOTOS: 'gm_sms_contact_photos_v1',
+  BUSINESS_PHOTOS: 'gm_sms_business_photos_v1',
 };
 
 /** Writes `value` to localStorage 400ms after it last changed, and immediately when the app is hidden. */
@@ -373,8 +382,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [tabHint, setTabHint] = useState<FilterCategory | null>(null);
   const [jumpToMessageId, setJumpToMessageId] = useState<string | null>(null);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [olderAvailable, setOlderAvailable] = useState(false);
+  const [yearCounts, setYearCounts] = useState<{ year: number; count: number }[] | null>(null);
+  const [loadingYear, setLoadingYear] = useState<number | null>(null);
+  const [loadingYearCounts, setLoadingYearCounts] = useState(false);
   const [filter, setFilter] = useState<FilterCategory>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const conversationsRef = useRef<Conversation[]>(conversations);
@@ -600,6 +611,24 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   });
   useDebouncedPersist(STORAGE_KEYS.CONTACT_PHOTOS, contactPhotos);
+  // Pictures you set for businesses (for example Axis Bank), shared by every sender ID of that business
+  const [businessPhotos, setBusinessPhotos] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.BUSINESS_PHOTOS);
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  useDebouncedPersist(STORAGE_KEYS.BUSINESS_PHOTOS, businessPhotos);
+  const setBusinessPhoto = useCallback((key: string, data: string | null) => {
+    setBusinessPhotos((prev) => {
+      const next = { ...prev };
+      if (data) next[key] = data;
+      else delete next[key];
+      return next;
+    });
+  }, []);
   const contactPhotosRef = useRef(contactPhotos);
   contactPhotosRef.current = contactPhotos;
 
@@ -623,8 +652,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return map;
   }, [contacts, contactPhotos]);
   const getContactPhoto = useCallback(
-    (number: string): string | undefined => (isPhoneNumber(number) ? photoByKey.get(phoneKey(number)) : undefined),
-    [photoByKey]
+    (number: string): string | undefined => {
+      if (isPhoneNumber(number)) return photoByKey.get(phoneKey(number));
+      const business = businessKey(number);
+      return business ? businessPhotos[business] : undefined;
+    },
+    [photoByKey, businessPhotos]
   );
   const contactForNumber = (number: string): Contact | undefined =>
     isPhoneNumber(number) ? contactByKey.get(phoneKey(number)) : undefined;
@@ -1461,7 +1494,6 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // What the last sync looked like, so an unchanged inbox costs nothing
   const rawCache = useRef<Map<string, NativeSmsMessage>>(new Map());
   rawCacheForDelete.current = rawCache.current;
-  const fullHistoryLoaded = useRef(false);
   const lastSyncSignature = useRef('');
   const lastContactsSignature = useRef('');
   const nextTick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -1505,7 +1537,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const syncDeviceSmsAndContacts = useCallback(async (opts?: { full?: boolean }) => {
+  const syncDeviceSmsAndContacts = useCallback(async (opts?: { years?: number[] }) => {
     setIsSyncingDevice(true);
     try {
       // 1. Sync contacts first to match names with numbers
@@ -1549,18 +1581,19 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await nextTick();
 
       // 2. Read device SMS messages from Telephony provider
-      // First read: the newest 1000 (fast, so the inbox is up quickly). Then the whole history once, and after
-      // that only the newest messages, merged into what is already known.
-      const wantAll = !!opts?.full;
-      const fresh = await smsBridge.readDeviceSms(wantAll ? 30000 : 1000);
-      if (wantAll) {
-        rawCache.current = new Map(fresh.map((m) => [m.id, m]));
-        rawCacheForDelete.current = rawCache.current;
-        fullHistoryLoaded.current = true;
-        setHistoryLoaded(true);
-      } else {
-        for (const m of fresh) rawCache.current.set(m.id, m);
-        if (fresh.length < 1000) setHistoryLoaded(true); // the whole inbox fit in the first read
+      // Ping shows the newest 200 messages first (so the inbox is up at once). Older years are loaded one at a time
+      // when you ask for them with "Show more". Everything read stays in the cache and is merged on later syncs.
+      const FIRST_READ = 200;
+      const fresh = await smsBridge.readDeviceSms(FIRST_READ);
+      for (const m of fresh) rawCache.current.set(m.id, m);
+      setOlderAvailable(fresh.length >= FIRST_READ);
+      for (const year of opts?.years ?? []) {
+        await nextTick();
+        const part = await smsBridge.readDeviceSms(100000, {
+          after: new Date(year, 0, 1).getTime(),
+          before: new Date(year + 1, 0, 1).getTime(),
+        });
+        for (const m of part) rawCache.current.set(m.id, m);
       }
       const rawSms = Array.from(rawCache.current.values()) as NativeSmsMessage[];
       if (!rawSms || rawSms.length === 0) {
@@ -1689,6 +1722,15 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         newMessagesList.push({ ...m, conversationId: target.id });
       });
 
+      // Chats you pinned, archived or blocked stay in the list even when their messages are in a year that is not loaded
+      for (const prev of previousConversations) {
+        if (!(prev.isPinned || prev.isArchived || prev.isBlocked)) continue;
+        if (newById.has(prev.id)) continue;
+        const key = isPhoneNumber(prev.phoneNumber) ? phoneKey(prev.phoneNumber) : '';
+        if (key.length >= 7 && newByDigits.has(key)) continue;
+        newConversationsList.push({ ...prev });
+      }
+
       newMessagesList.sort((a, b) => a.timestamp - b.timestamp);
       newConversationsList.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
 
@@ -1734,8 +1776,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Always call the latest handlers without re-subscribing the native listeners each render
   const incomingHandlerRef = useRef(handleIncomingDeviceSms);
   incomingHandlerRef.current = handleIncomingDeviceSms;
-  const loadFullRef = useRef(settings.loadFullHistory);
-  loadFullRef.current = settings.loadFullHistory;
+  const loadedYearsRef = useRef<number[]>(settings.loadedYears || []);
+  loadedYearsRef.current = settings.loadedYears || [];
   const syncRef = useRef(syncDeviceSmsAndContacts);
   syncRef.current = syncDeviceSmsAndContacts;
   const isSyncingRef = useRef(false);
@@ -1782,22 +1824,22 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
-    // The complete history (every older message) is read once, a few seconds after the inbox is up
-    const loadHistory = async () => {
-      if (!loadFullRef.current) return; // only after "Show more" was tapped once
+    // Years you loaded earlier with "Show more" come back by themselves, a few seconds after the inbox is up
+    const loadSavedYears = async () => {
+      if (loadedYearsRef.current.length === 0) return;
       if (isSyncingRef.current) {
-        historyTimer = window.setTimeout(loadHistory, 1500);
+        historyTimer = window.setTimeout(loadSavedYears, 1500);
         return;
       }
       isSyncingRef.current = true;
       try {
         const perms = await smsBridge.checkPermissions();
-        if (perms.readSms) await syncRef.current({ full: true });
+        if (perms.readSms) await syncRef.current({ years: loadedYearsRef.current });
       } finally {
         isSyncingRef.current = false;
       }
     };
-    let historyTimer: number | undefined = window.setTimeout(loadHistory, 5000);
+    let historyTimer: number | undefined = window.setTimeout(loadSavedYears, 4500);
     // The first read of messages and contacts starts after the app is on screen, so opening stays smooth
     const startupTimer = window.setTimeout(autoSync, 1800);
     const onVisible = () => {
@@ -1831,21 +1873,46 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [isNativePlatform]);
 
-  // "Show more": read every message from the phone (the same way backup does), and keep doing so on later launches
-  const loadFullHistory = useCallback(async () => {
-    if (!isNativePlatform || isSyncingRef.current) return;
-    isSyncingRef.current = true;
-    setIsLoadingHistory(true);
+  // "Show more": ask the phone how many messages each year has
+  const fetchYearCounts = useCallback(async () => {
+    if (!isNativePlatform) return;
+    setLoadingYearCounts(true);
     try {
-      const perms = await smsBridge.checkPermissions();
-      if (!perms.readSms) return;
-      updateSettings({ loadFullHistory: true });
-      await syncRef.current({ full: true });
+      setYearCounts(await smsBridge.getSmsYears());
+    } catch (err) {
+      console.warn('Could not read message years:', err);
+      setYearCounts([]);
     } finally {
-      isSyncingRef.current = false;
-      setIsLoadingHistory(false);
+      setLoadingYearCounts(false);
     }
-  }, [isNativePlatform, updateSettings]);
+  }, [isNativePlatform]);
+
+  // ...and load one year of messages when it is picked
+  const loadYear = useCallback(
+    async (year: number) => {
+      if (!isNativePlatform || loadingYear !== null) return;
+      setLoadingYear(year);
+      try {
+        // wait for a sync that is already running
+        for (let i = 0; i < 40 && isSyncingRef.current; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+        isSyncingRef.current = true;
+        try {
+          const perms = await smsBridge.checkPermissions();
+          if (!perms.readSms) return;
+          await syncRef.current({ years: [year] });
+        } finally {
+          isSyncingRef.current = false;
+        }
+        const years = Array.from(new Set([...loadedYearsRef.current, year])).sort((a, b) => b - a);
+        updateSettings({ loadedYears: years });
+      } finally {
+        setLoadingYear(null);
+      }
+    },
+    [isNativePlatform, loadingYear, updateSettings]
+  );
 
   // Track real carrier results (sent / delivered / failed) for outgoing SMS
   useEffect(() => {
@@ -1901,11 +1968,16 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTabHint,
     jumpToMessageId,
     setJumpToMessageId,
-    historyLoaded,
-    isLoadingHistory,
-    loadFullHistory,
+    olderAvailable,
+    yearCounts,
+    loadedYears: settings.loadedYears || [],
+    loadingYear,
+    loadingYearCounts,
+    fetchYearCounts,
+    loadYear,
     spamConversationIds,
     getContactPhoto,
+    setBusinessPhoto,
     isContactNumber,
     addNumberToContacts,
     unreadCounts,

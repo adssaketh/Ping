@@ -9,14 +9,33 @@ import { AvatarCircle } from './AvatarCircle.tsx';
 
 interface SearchResultsProps {
   query: string;
+  onShowOlder?: () => void;
 }
 
 const shortDate = (ts: number) =>
   new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 
 /** Words, numbers and dates: "refund", "9494", "2025", "june", "22 oct", "22/10/2026", "hdfc june". */
-export const SearchResults: React.FC<SearchResultsProps> = ({ query }) => {
-  const { conversations, messages, selectConversation, setJumpToMessageId, getContactPhoto } = useSMS();
+export const SearchResults: React.FC<SearchResultsProps> = ({ query, onShowOlder }) => {
+  const { conversations, messages, selectConversation, setJumpToMessageId, getContactPhoto, olderAvailable, yearCounts, loadedYears } =
+    useSMS();
+  const moreToLoad = olderAvailable && (!yearCounts || yearCounts.some((y) => !loadedYears.includes(y.year)));
+  const olderHint = moreToLoad ? (
+    <div className="mx-4 mt-3 mb-2 flex items-center gap-3 px-4 py-3 rounded-[24px] bg-m3-surface-hi dark:bg-m3-d2">
+      <p className="flex-1 text-xs text-m3-variant dark:text-m3-variant-dk">
+        Search covers the messages Ping has loaded. Load older years to include them.
+      </p>
+      {onShowOlder && (
+        <button
+          type="button"
+          onClick={onShowOlder}
+          className="px-4 py-2 rounded-full text-xs font-semibold shrink-0 bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep"
+        >
+          Show more
+        </button>
+      )}
+    </div>
+  ) : null;
   const [shown, setShown] = useState(80);
   useEffect(() => {
     setShown(80);
@@ -84,12 +103,14 @@ export const SearchResults: React.FC<SearchResultsProps> = ({ query }) => {
         <p className="text-xs mt-2 max-w-xs leading-relaxed">
           Try a word, a number, or a date such as 2025, June 2026, 22 Oct or 22/10/2026.
         </p>
+        <div className="w-full mt-6 text-left">{olderHint}</div>
       </div>
     );
   }
 
   return (
     <div className="pb-2">
+      {olderHint}
       {parsed.date && (
         <div className="mx-4 mb-3 mt-1 flex items-center gap-3 px-4 py-3 rounded-[24px] bg-m3-primary-container/70 dark:bg-m3-primary-deep/40">
           <CalendarDays className="w-5 h-5 text-m3-primary dark:text-m3-primary-light shrink-0" />

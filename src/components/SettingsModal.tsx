@@ -32,6 +32,7 @@ import { useSMS } from '../context/SMSContext.tsx';
 import { PWAInstallButton } from './PWAInstallButton.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
+import { smsBridge } from '../services/smsBridge.ts';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -90,6 +91,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [isOpen]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [versionClicks, setVersionClicks] = useState(0);
+  const [appInfo, setAppInfo] = useState<{ versionName: string; versionCode: number } | null>(null);
+  useEffect(() => {
+    if (isOpen) smsBridge.getAppInfo().then(setAppInfo);
+  }, [isOpen]);
   const [devOptionsUnlocked, setDevOptionsUnlocked] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -378,7 +383,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <button
                 type="button"
                 onClick={async () => {
-                  const res = await syncDeviceSmsAndContacts({ full: true });
+                  const res = await syncDeviceSmsAndContacts({ years: settings.loadedYears });
                   showToast(`Synced ${res.smsCount} SMS & ${res.contactCount} contacts!`);
                 }}
                 disabled={isSyncingDevice}
@@ -1054,7 +1059,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               className="text-[11px] cursor-pointer select-none hover:text-m3-on-surface dark:hover:text-m3-on-surface-dk transition-colors"
               title="Version build"
             >
-              Version 2026.10.20-release · Material You Design 3
+              {appInfo ? `Version ${appInfo.versionName} (build ${appInfo.versionCode})` : 'Version 1.0'} · Material You Design 3
             </p>
           </div>
         </div>

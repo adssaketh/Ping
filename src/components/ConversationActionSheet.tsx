@@ -13,6 +13,7 @@ import {
   Pin,
   PinOff,
   ShieldAlert,
+  Camera,
   Trash2,
   UserPlus,
 } from 'lucide-react';
@@ -20,7 +21,8 @@ import { useSMS } from '../context/SMSContext.tsx';
 import { extractOtpCode, getInitials } from '../utils/smsUtils.ts';
 import { copyText } from '../utils/clipboard.ts';
 import { AvatarCircle } from './AvatarCircle.tsx';
-import { isPhoneNumber } from '../utils/phone.ts';
+import { businessKey, isPhoneNumber } from '../utils/phone.ts';
+import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { spring, fadeFast } from '../motion.ts';
 
 interface ConversationActionSheetProps {
@@ -54,6 +56,7 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
     isContactNumber,
     addNumberToContacts,
     getContactPhoto,
+    setBusinessPhoto,
   } = useSMS();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -134,6 +137,24 @@ export const ConversationActionSheet: React.FC<ConversationActionSheetProps> = (
           addNumberToContacts(conv.phoneNumber);
         }),
       });
+    }
+    const bKey = businessKey(conv.phoneNumber);
+    if (bKey) {
+      const hasPhoto = !!getContactPhoto(conv.phoneNumber);
+      actions.push({
+        key: 'business-photo',
+        icon: Camera,
+        label: hasPhoto ? 'Change business picture' : 'Add business picture',
+        onClick: runAndClose(() => profilePhotoEditor.choose({ type: 'business', key: bKey, name: bKey })),
+      });
+      if (hasPhoto) {
+        actions.push({
+          key: 'business-photo-remove',
+          icon: Trash2,
+          label: 'Remove business picture',
+          onClick: runAndClose(() => setBusinessPhoto(bKey, null)),
+        });
+      }
     }
     actions.push({
       key: 'spam',

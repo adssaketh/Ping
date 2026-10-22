@@ -9,6 +9,7 @@ import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.database.Cursor;
@@ -249,6 +250,22 @@ public class PingSmsPlugin extends Plugin {
             activity.runOnUiThread(() -> ((MainActivity) activity).setBackEnabled(enabled));
         }
         call.resolve();
+    }
+
+    /** Which build is installed (the build number is the GitHub run number). */
+    @PluginMethod
+    public void getAppInfo(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            PackageInfo info = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
+            ret.put("versionName", info.versionName == null ? "" : info.versionName);
+            long code = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? info.getLongVersionCode() : info.versionCode;
+            ret.put("versionCode", code);
+        } catch (Exception e) {
+            ret.put("versionName", "unknown");
+            ret.put("versionCode", 0);
+        }
+        call.resolve(ret);
     }
 
     /** The web app has drawn its first screen: the launch splash can hand over. */
@@ -740,6 +757,22 @@ public class PingSmsPlugin extends Plugin {
         }
 
         int limit = call.getInt("limit", 500);
+        // optional date range (milliseconds): after <= date < before. Used to load one year at a time.
+        Double afterParam = call.getDouble("after", 0.0);
+        Double beforeParam = call.getDouble("before", 0.0);
+        long afterMs = afterParam == null ? 0L : afterParam.longValue();
+        long beforeMs = beforeParam == null ? 0L : beforeParam.longValue();
+        StringBuilder selection = new StringBuilder();
+        java.util.ArrayList<String> selectionArgs = new java.util.ArrayList<>();
+        if (afterMs > 0) {
+            selection.append("date >= ?");
+            selectionArgs.add(String.valueOf(afterMs));
+        }
+        if (beforeMs > 0) {
+            if (selection.length() > 0) selection.append(" AND ");
+            selection.append("date < ?");
+            selectionArgs.add(String.valueOf(beforeMs));
+        }
         ContentResolver cr = context.getContentResolver();
         Cursor cursor = null;
         JSArray messagesArray = new JSArray();
@@ -756,7 +789,13 @@ public class PingSmsPlugin extends Plugin {
                 "type"
             };
 
-            cursor = cr.query(uri, projection, null, null, "date DESC LIMIT " + limit);
+            cursor = cr.query(
+                uri,
+                projection,
+                selection.length() > 0 ? selection.toString() : null,
+                selectionArgs.isEmpty() ? null : selectionArgs.toArray(new String[0]),
+                "date DESC LIMIT " + limit
+            );
 
             if (cursor != null) {
                 while (cursor.moveToNext()) {
@@ -790,6 +829,62 @@ public class PingSmsPlugin extends Plugin {
             if (cursor != null) {
                 cursor.close();
             }
+        }
+    }
+
+    /** How many messages the phone holds per year (newest year first), so the app can offer them one at a time. */
+    @PluginMethod
+    public void getSmsYears(PluginCall call) {
+        Context context = getContext();
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED) {
+            call.reject("PERMISSION_DENIED", "READ_SMS permission is required");
+            return;
+        }
+        Cursor cursor = null;
+        try {
+            cursor = context.getContentResolver().query(
+                Uri.parse("content://sms/"),
+                new String[] { "date" },
+                null,
+                null,
+                "date DESC"
+            );
+            java.util.TreeMap<Integer, Integer> counts = new java.util.TreeMap<>(java.util.Collections.<Integer>reverseOrder());
+            if (cursor != null) {
+                java.util.Calendar calendar = java.util.Calendar.getInstance();
+                int index = cursor.getColumnIndexOrThrow("date");
+                long yearStart = Long.MAX_VALUE;
+                long yearEnd = Long.MIN_VALUE;
+                int year = 0;
+                while (cursor.moveToNext()) {
+                    long date = cursor.getLong(index);
+                    if (date < yearStart || date >= yearEnd) {
+                        calendar.setTimeInMillis(date);
+                        year = calendar.get(java.util.Calendar.YEAR);
+                        calendar.set(year, java.util.Calendar.JANUARY, 1, 0, 0, 0);
+                        calendar.set(java.util.Calendar.MILLISECOND, 0);
+                        yearStart = calendar.getTimeInMillis();
+                        calendar.set(year + 1, java.util.Calendar.JANUARY, 1, 0, 0, 0);
+                        yearEnd = calendar.getTimeInMillis();
+                    }
+                    Integer current = counts.get(year);
+                    counts.put(year, current == null ? 1 : current + 1);
+                }
+            }
+            JSArray years = new JSArray();
+            for (java.util.Map.Entry<Integer, Integer> e : counts.entrySet()) {
+                JSObject o = new JSObject();
+                o.put("year", e.getKey());
+                o.put("count", e.getValue());
+                years.put(o);
+            }
+            JSObject ret = new JSObject();
+            ret.put("years", years);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("FAILED_TO_READ_SMS", e.getMessage());
+        } finally {
+            if (cursor != null) cursor.close();
         }
     }
 

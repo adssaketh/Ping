@@ -49,13 +49,15 @@ interface PingSmsPluginInterface {
   checkPermissionsStatus(): Promise<PermissionsStatus>;
   requestAllPermissions(): Promise<PermissionsStatus>;
   readContacts(): Promise<{ contacts: NativeContact[]; count: number }>;
-  readSms(options?: { limit?: number }): Promise<{ messages: NativeSmsMessage[]; count: number }>;
+  readSms(options?: { limit?: number; after?: number; before?: number }): Promise<{ messages: NativeSmsMessage[]; count: number }>;
+  getSmsYears(): Promise<{ years: { year: number; count: number }[] }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
   markThreadRead(options: { address: string }): Promise<{ updated: number }>;
   setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
   getSystemColors(): Promise<SystemPalettes>;
   setBackEnabled(options: { enabled: boolean }): Promise<void>;
   appReady(): Promise<void>;
+  getAppInfo(): Promise<{ versionName: string; versionCode: number }>;
   consumeLaunchShortcut(): Promise<{ target?: string }>;
   addContact(options: { phoneNumber: string; name?: string }): Promise<{ done: boolean }>;
   readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
@@ -176,17 +178,24 @@ export const smsBridge = {
     }
   },
 
-  async readDeviceSms(limit = 500): Promise<NativeSmsMessage[]> {
+  async readDeviceSms(limit = 500, range?: { after?: number; before?: number }): Promise<NativeSmsMessage[]> {
     if (!isNativeAndroid()) {
       return [];
     }
     try {
-      const res = await PingSms.readSms({ limit });
+      const res = await PingSms.readSms({ limit, after: range?.after, before: range?.before });
       return res.messages || [];
     } catch (err) {
       console.warn('readDeviceSms failed:', err);
       throw err;
     }
+  },
+
+  /** How many messages the phone holds in each year (newest year first). */
+  async getSmsYears(): Promise<{ year: number; count: number }[]> {
+    if (!isNativeAndroid()) return [];
+    const res = await PingSms.getSmsYears();
+    return res.years || [];
   },
 
   async requestNotificationPermission(): Promise<boolean> {
@@ -277,6 +286,16 @@ export const smsBridge = {
       await PingSms.showKeyboard();
     } catch (err) {
       console.warn('showKeyboard failed:', err);
+    }
+  },
+
+  /** Installed version and build number, so you can tell which build is running. */
+  async getAppInfo(): Promise<{ versionName: string; versionCode: number } | null> {
+    if (!isNativeAndroid()) return null;
+    try {
+      return await PingSms.getAppInfo();
+    } catch {
+      return null;
     }
   },
 

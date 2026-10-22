@@ -9,6 +9,7 @@ import {
   Clock,
   Star,
   Trash2,
+  Camera,
   Copy,
   Check,
   CheckCheck,
@@ -37,7 +38,8 @@ import { ScheduleModal } from './ScheduleModal.tsx';
 import { MessageActionSheet } from './MessageActionSheet.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
-import { isPhoneNumber } from '../utils/phone.ts';
+import { businessKey, isPhoneNumber } from '../utils/phone.ts';
+import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { AvatarCircle } from './AvatarCircle.tsx';
 
 interface ChatViewProps {
@@ -68,6 +70,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     getContactPhoto,
     jumpToMessageId,
     setJumpToMessageId,
+    setBusinessPhoto,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -357,6 +360,38 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                   {activeConversation.isArchived ? <ArchiveRestore className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
                   <span>{activeConversation.isArchived ? 'Unarchive' : 'Archive'}</span>
                 </button>
+
+                {businessKey(activeConversation.phoneNumber) && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        const key = businessKey(activeConversation.phoneNumber) as string;
+                        profilePhotoEditor.choose({ type: 'business', key, name: key });
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 text-m3-variant dark:text-m3-variant-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-xl transition-colors"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>
+                        {getContactPhoto(activeConversation.phoneNumber) ? 'Change business picture' : 'Add business picture'}
+                      </span>
+                    </button>
+                    {getContactPhoto(activeConversation.phoneNumber) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setBusinessPhoto(businessKey(activeConversation.phoneNumber) as string, null);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2 text-m3-variant dark:text-m3-variant-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3 rounded-xl transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Remove business picture</span>
+                      </button>
+                    )}
+                  </>
+                )}
 
                 {isNativePlatform &&
                   isPhoneNumber(activeConversation.phoneNumber) &&

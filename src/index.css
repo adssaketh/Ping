@@ -212,3 +212,37 @@
     background-color: color-mix(in oklab, var(--c-primary-container) 85%, transparent);
   }
 }
+
+/* Loading placeholders: a soft light sweeps across (transform only, so it stays smooth) */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: color-mix(in oklab, var(--c-outline) 16%, transparent);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 55%, transparent), transparent);
+  animation: skeleton-sweep 1.3s var(--ease-emphasized) infinite;
+}
+.dark .skeleton::after {
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, white 12%, transparent), transparent);
+}
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+.top-progress-bar {
+  animation: top-progress 1.15s var(--ease-emphasized) infinite;
+}
+@keyframes top-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}

@@ -5,6 +5,8 @@ import { LatestMessageCard } from './LatestMessageCard.tsx';
 import { AvatarCircle } from './AvatarCircle.tsx';
 import { ConversationActionSheet } from './ConversationActionSheet.tsx';
 import { SearchResults } from './SearchResults.tsx';
+import { HistorySheet } from './HistorySheet.tsx';
+import { SkeletonList, TopProgress } from './Skeleton.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
 import type { PressHandlers } from '../utils/useLongPress.ts';
@@ -233,9 +235,11 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
     settings,
     spamConversationIds,
     getContactPhoto,
-    historyLoaded,
-    isLoadingHistory,
-    loadFullHistory,
+    olderAvailable,
+    yearCounts,
+    loadedYears,
+    loadingYear,
+    isSyncingDevice,
     isNativePlatform,
   } = useSMS();
 
@@ -271,6 +275,8 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
   // Long-press a conversation for its options (pin, archive, copy OTP, spam, block, delete ...)
   const [actionConvId, setActionConvId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const hasUnloadedYears = !yearCounts || yearCounts.some((y) => !loadedYears.includes(y.year));
   const { bind: bindPress, consumeClick: consumePressClick } = useLongPress<string>(setActionConvId);
   useBackHandler(actionConvId !== null, () => setActionConvId(null));
 
@@ -289,6 +295,7 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
   const pagerIndex = PAGER_FILTERS.indexOf(filter);
   const deferredQuery = useDeferredValue(searchQuery);
   const searching = deferredQuery.trim() !== '';
+  const searchPending = searchQuery.trim() !== deferredQuery.trim();
   const pagerEnabled = settings.showCategoriesTabs && pagerIndex >= 0 && !searching;
   const pagerRef = useRef<HTMLDivElement>(null);
   const currentPaneRef = useRef<HTMLDivElement>(null);
@@ -454,6 +461,9 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
 
   // One page of the list for a given tab (used by the swipe pager and by the single view)
   const renderContent = (f: FilterCategory, limit = Infinity) => {
+    if (conversations.length === 0 && isSyncingDevice) {
+      return <SkeletonList count={9} label="Loading your messages" />;
+    }
     const list = f === filter ? filteredConversations : conversations.filter((c) => matchesFilter(c, f));
     // The most recently arrived message gets a big card with all its details
     let featured: Conversation | null = null;
@@ -625,29 +635,32 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
             )}
           </div>
         )}
-        {/* Older messages are loaded when asked for (the newest ones show first so the inbox opens fast) */}
-        {f === filter && isNativePlatform && !historyLoaded && (
-          <div className="mx-4 mt-2 mb-4 p-4 rounded-[28px] bg-m3-surface-hi dark:bg-m3-d2 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light flex items-center justify-center shrink-0">
-              {isLoadingHistory ? <RefreshCw className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+        {/* Newest 200 messages first; older years are offered one at a time */}
+        {f === filter && isNativePlatform && olderAvailable && (hasUnloadedYears || loadingYear !== null) && (
+          <div className="mx-4 mt-2 mb-4 rounded-[28px] bg-m3-surface-hi dark:bg-m3-d2 overflow-hidden">
+            <div className="p-4 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light flex items-center justify-center shrink-0">
+                {loadingYear !== null ? <RefreshCw className="w-5 h-5 animate-spin" /> : <History className="w-5 h-5" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-m3-on-surface dark:text-white">
+                  {loadingYear !== null ? `Loading ${loadingYear}…` : 'Showing your latest messages'}
+                </p>
+                <p className="text-xs text-m3-variant dark:text-m3-variant-dk">
+                  {loadingYear !== null ? 'Older messages are on their way.' : 'Older messages are grouped by year.'}
+                </p>
+              </div>
+              {loadingYear === null && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="px-4 py-2.5 rounded-full text-xs font-semibold bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep shrink-0"
+                >
+                  Show more
+                </button>
+              )}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-m3-on-surface dark:text-white">
-                {isLoadingHistory ? 'Loading older messages…' : 'Showing your recent messages'}
-              </p>
-              <p className="text-xs text-m3-variant dark:text-m3-variant-dk">
-                {isLoadingHistory ? 'This can take a few seconds.' : 'Tap Show more to load every message on your phone.'}
-              </p>
-            </div>
-            {!isLoadingHistory && (
-              <button
-                type="button"
-                onClick={loadFullHistory}
-                className="px-4 py-2.5 rounded-full text-xs font-semibold bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep shrink-0"
-              >
-                Show more
-              </button>
-            )}
+            {loadingYear !== null && <SkeletonList count={3} label={`Loading ${loadingYear}`} />}
           </div>
         )}
       </>
@@ -703,11 +716,21 @@ export const ConversationList: React.FC<ConversationListProps> = ({ onStartChat 
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto pb-28 pt-1" onScroll={handleScroll}>
-          {searching ? <SearchResults query={deferredQuery} /> : renderContent(filter, visibleCount)}
+          {searching ? (
+            searchPending ? (
+              <SkeletonList count={6} label="Searching" />
+            ) : (
+              <SearchResults query={deferredQuery} onShowOlder={() => setHistoryOpen(true)} />
+            )
+          ) : (
+            renderContent(filter, visibleCount)
+          )}
         </div>
       )}
 
       <ConversationActionSheet conversationId={actionConvId} onClose={() => setActionConvId(null)} />
+      <HistorySheet isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
+      {(loadingYear !== null || (isSyncingDevice && conversations.length === 0)) && <TopProgress />}
 
       {/* Material 3 Expressive floating action button (icon only) */}
       <motion.div

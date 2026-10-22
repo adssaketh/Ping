@@ -4,22 +4,24 @@ import { AnimatePresence, motion } from 'motion/react';
 import { RotateCw, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { fileToSourceDataUrl } from '../utils/profilePhoto.ts';
-import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
+import { profilePhotoEditor, PhotoTarget } from '../utils/profilePhotoEditor.ts';
 import { useBackHandler } from '../backStack.ts';
 import { spring, fadeFast } from '../motion.ts';
 
 const OUTPUT = 256; // saved picture size in pixels
-const MIN_ZOOM = 1;
 const MAX_ZOOM = 4;
 
 interface CropperProps {
   source: string;
   onCancel: () => void;
   onSave: (cropped: string) => void;
+  /** Business logos may be zoomed out to fit completely (white around them) */
+  allowZoomOut?: boolean;
 }
 
 /** Move, zoom and rotate the photo under a circular guide, then save. */
-const PhotoCropper: React.FC<CropperProps> = ({ source, onCancel, onSave }) => {
+const PhotoCropper: React.FC<CropperProps> = ({ source, onCancel, onSave, allowZoomOut = false }) => {
+  const MIN_ZOOM = allowZoomOut ? 0.4 : 1;
   const size = useRef(Math.max(220, Math.min(320, window.innerWidth - 64))).current;
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -105,7 +107,7 @@ const PhotoCropper: React.FC<CropperProps> = ({ source, onCancel, onSave }) => {
   return (
     <div className="flex flex-col items-center">
       <div
-        className="relative overflow-hidden rounded-[28px] bg-black select-none"
+        className={`relative overflow-hidden rounded-[28px] select-none ${allowZoomOut ? 'bg-white' : 'bg-black'}`}
         style={{ width: size, height: size, touchAction: 'none' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -201,16 +203,21 @@ const PhotoCropper: React.FC<CropperProps> = ({ source, onCancel, onSave }) => {
 
 /** Lives once in App: opens the photo picker and the editor when any screen asks for it. */
 export const ProfilePhotoEditor: React.FC = () => {
-  const { settings, updateSettings } = useSMS();
+  const { settings, updateSettings, getContactPhoto, setBusinessPhoto } = useSMS();
   const inputRef = useRef<HTMLInputElement>(null);
   const [source, setSource] = useState<string | null>(null);
-  const latest = useRef(settings);
-  latest.current = settings;
+  const [target, setTarget] = useState<PhotoTarget>({ type: 'profile' });
+  const latest = useRef({ settings, getContactPhoto });
+  latest.current = { settings, getContactPhoto };
 
   useEffect(
     () =>
-      profilePhotoEditor.subscribe((action) => {
-        const existing = latest.current.profilePhotoSource || latest.current.profilePhoto;
+      profilePhotoEditor.subscribe((action, t) => {
+        setTarget(t);
+        const existing =
+          t.type === 'business'
+            ? latest.current.getContactPhoto(t.key)
+            : latest.current.settings.profilePhotoSource || latest.current.settings.profilePhoto;
         if (action === 'edit' && existing) setSource(existing);
         else inputRef.current?.click();
       }),
@@ -256,13 +263,15 @@ export const ProfilePhotoEditor: React.FC = () => {
                   transition={spring}
                 >
                   <h3 className="text-base font-semibold text-center mb-4 text-m3-on-surface dark:text-white">
-                    Edit picture
+                    {target.type === 'business' ? `Picture for ${target.name}` : 'Edit picture'}
                   </h3>
                   <PhotoCropper
                     source={source}
+                    allowZoomOut={target.type === 'business'}
                     onCancel={() => setSource(null)}
                     onSave={(cropped) => {
-                      updateSettings({ profilePhoto: cropped, profilePhotoSource: source });
+                      if (target.type === 'business') setBusinessPhoto(target.key, cropped);
+                      else updateSettings({ profilePhoto: cropped, profilePhotoSource: source });
                       setSource(null);
                     }}
                   />

@@ -27,12 +27,12 @@ export const BottomTabs: React.FC = () => {
         <motion.nav
           key="bottom-tabs"
           aria-label="Message categories"
-          className="shrink-0 px-2 pt-2 pb-2 bg-m3-surface-hi dark:bg-m3-d1 border-t border-m3-line/60 dark:border-m3-d4"
+          className="shrink-0 px-3 pt-1 pb-2"
           initial={{ y: 90, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={spring}
         >
-          <div className="flex items-stretch justify-between gap-1 max-w-xl mx-auto">
+          <div className="flex items-stretch justify-between gap-1 max-w-xl mx-auto rounded-[32px] bg-m3-surface-hi dark:bg-m3-d2 px-2 pt-2 pb-2 shadow-md shadow-black/5 dark:shadow-black/30">
             {TABS.map((tab) => {
               const active = current === (tab.id as FilterCategory);
               const count = unreadCounts[tab.id];

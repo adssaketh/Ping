@@ -25,3 +25,14 @@ export function normalizeText(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
 }
+
+/**
+ * The business a sender ID belongs to, so every ID of the same business shares one picture:
+ * "AX-AXISBK-S", "VM-AXISBK-S" and "JD-AXISBK-T" are all "AXISBK". Phone numbers have no business key.
+ */
+export function businessKey(sender: string): string | null {
+  const raw = (sender || '').trim();
+  if (!raw || isPhoneNumber(raw)) return null;
+  const match = /^[a-z0-9]{2}-([a-z0-9]{2,12})(?:-[a-z])?$/i.exec(raw);
+  return (match ? match[1] : raw).toUpperCase();
+}
