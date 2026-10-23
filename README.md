@@ -1,4 +1,4 @@
-# Ping
+# Ping 💌
 
 Ping is an open-source SMS app for Android with Material You colours, swipeable message categories, copy-OTP
 shortcuts, on-device spam protection and local backup and restore.
