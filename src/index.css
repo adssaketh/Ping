@@ -366,3 +366,49 @@ html.dark[data-glass-border='1'] .bar-glass {
   -webkit-mask-image: none;
   mask-image: none;
 }
+
+/* The list panes use overlay scrolling: a styled ::-webkit-scrollbar can reserve a 6px gutter inside the pane in
+   Android WebView, which pushes content off-centre relative to the (non-scrolling) search bar above it. */
+.edge-mask {
+  scrollbar-width: none;
+}
+.edge-mask::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- First-launch setup: drifting gradient blobs (stopped by the reduced-motion rule above) ---- */
+@keyframes ob-drift-a {
+  0%, 100% { transform: translate3d(-8%, -6%, 0) scale(1); }
+  50% { transform: translate3d(10%, 8%, 0) scale(1.15); }
+}
+@keyframes ob-drift-b {
+  0%, 100% { transform: translate3d(8%, 10%, 0) scale(1.1); }
+  50% { transform: translate3d(-10%, -8%, 0) scale(0.95); }
+}
+.ob-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(64px);
+  opacity: 0.35;
+  pointer-events: none;
+  will-change: transform;
+}
+html.dark .ob-blob {
+  opacity: 0.28;
+}
+.ob-blob-a {
+  background: var(--c-primary-light);
+  animation: ob-drift-a 14s ease-in-out infinite;
+}
+.ob-blob-b {
+  background: var(--c-primary);
+  animation: ob-drift-b 18s ease-in-out infinite;
+}
+@keyframes ob-pulse-ring {
+  0% { transform: scale(0.9); opacity: 0.55; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+.ob-ring {
+  opacity: 0;
+  animation: ob-pulse-ring 2.2s var(--ease-emphasized-decelerate) infinite;
+}

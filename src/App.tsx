@@ -10,7 +10,9 @@ import { BottomTabs } from './components/BottomTabs.tsx';
 import { InboxColumn } from './components/InboxColumn.tsx';
 import { spring, useIsDesktop } from './motion.ts';
 import { handleBackPress, useBackHandler } from './backStack.ts';
-import { smsBridge } from './services/smsBridge.ts';
+import { smsBridge, isNativeAndroid } from './services/smsBridge.ts';
+import { OnboardingFlow } from './components/OnboardingFlow.tsx';
+import { isSetupDone } from './utils/setupFlag.ts';
 
 // Big screens that are not needed to show the inbox are loaded the first time they open
 // (and fetched in the background shortly after launch), which makes the app start faster.
@@ -53,6 +55,8 @@ const AppContent: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
+  // First-launch setup: opens by itself once (Android app only) and again from Settings
+  const [setupOpen, setSetupOpen] = useState(() => isNativeAndroid() && !isSetupDone());
   const isDesktop = useIsDesktop();
 
   // Stable callbacks: new function objects every render would defeat React.memo above
@@ -170,11 +174,17 @@ const AppContent: React.FC = () => {
         onClose={() => setSettingsOpen(false)}
         onOpenPrivacy={openPrivacy}
         onOpenCredits={openCredits}
+        onOpenSetup={() => {
+          setSettingsOpen(false);
+          setSetupOpen(true);
+        }}
       />
 
       <PrivacyPolicyModal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <CreditsModal isOpen={creditsOpen} onClose={() => setCreditsOpen(false)} />
       <ProfilePhotoEditor />
+
+      <OnboardingFlow open={setupOpen} onFinish={() => setSetupOpen(false)} />
 
       <NewChatModal
         isOpen={newChatOpen}

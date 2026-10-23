@@ -29,6 +29,7 @@ import { useSMS } from '../context/SMSContext.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { smsBridge } from '../services/smsBridge.ts';
+import { ThemePicker } from './ThemePicker.tsx';
 
 /** A row of pill buttons where exactly one is selected. */
 function ChoiceChips<T extends string>({
@@ -66,6 +67,8 @@ interface SettingsModalProps {
   onClose: () => void;
   onOpenPrivacy?: () => void;
   onOpenCredits?: () => void;
+  /** Re-opens the first-launch setup */
+  onOpenSetup?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -73,6 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onOpenPrivacy,
   onOpenCredits,
+  onOpenSetup,
 }) => {
   const isDesktop = useIsDesktop();
   const {
@@ -354,16 +358,27 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span className="text-xs font-medium text-m3-outline dark:text-m3-outline-dk">
                   Device Permissions
                 </span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await requestPermissions();
-                    showToast('Permissions refreshed');
-                  }}
-                  className="text-xs text-m3-primary dark:text-m3-primary-light hover:underline font-medium"
-                >
-                  Request Permissions
-                </button>
+                <div className="flex items-center gap-3">
+                  {onOpenSetup && (
+                    <button
+                      type="button"
+                      onClick={onOpenSetup}
+                      className="text-xs text-m3-primary dark:text-m3-primary-light hover:underline font-medium"
+                    >
+                      Setup guide
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await requestPermissions();
+                      showToast('Permissions refreshed');
+                    }}
+                    className="text-xs text-m3-primary dark:text-m3-primary-light hover:underline font-medium"
+                  >
+                    Request Permissions
+                  </button>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -443,28 +458,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 Adjust light and dark mode for standard SMS
               </p>
 
-              <div className="grid grid-cols-3 gap-2.5">
-                {(['system', 'light', 'dark'] as const).map((mode) => {
-                  const isSelected = settings.themeMode === mode;
-                  return (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setThemeMode(mode)}
-                      className={`py-2.5 px-3 rounded-2xl text-xs font-medium border flex flex-col items-center gap-1.5 transition ${
-                        isSelected
-                          ? 'bg-m3-primary-container dark:bg-m3-primary-deep border-m3-primary dark:border-m3-primary-light text-m3-on-primary-deep dark:text-m3-primary-container font-bold shadow-xs'
-                          : 'border-m3-line dark:border-m3-d4 text-m3-variant dark:text-m3-variant-dk hover:bg-m3-surface-hi dark:hover:bg-m3-d3'
-                      }`}
-                    >
-                      {mode === 'system' && <Smartphone className="w-4 h-4" />}
-                      {mode === 'light' && <Sun className="w-4 h-4 text-amber-500" />}
-                      {mode === 'dark' && <Moon className="w-4 h-4 text-m3-primary" />}
-                      <span className="capitalize">{mode === 'system' ? 'System' : mode}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <ThemePicker />
             </div>
           </div>
 

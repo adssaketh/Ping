@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <script>
+      // Apply the saved theme before the first paint so the wrong theme never flashes.
+      // Mirrors SMSContext: settings live in localStorage "gm_sms_settings_v2" (themeMode: system | light | dark).
+      (function () {
+        try {
+          var mode = 'system';
+          var raw = localStorage.getItem('gm_sms_settings_v2');
+          if (raw) {
+            var saved = JSON.parse(raw);
+            if (saved && (saved.themeMode === 'light' || saved.themeMode === 'dark')) mode = saved.themeMode;
+          }
+          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
     <title>Ping - SMS</title>
     <meta name="description" content="Ping - A clean, minimal standard SMS text messaging app crafted with Material Design 3 guidelines." />
     <meta name="theme-color" content="#0B57D0" />

@@ -19,6 +19,7 @@ import android.util.Base64;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.ContactsContract;
+import android.provider.Settings;
 import android.provider.Telephony;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -32,6 +33,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
+import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.view.WindowCompat;
@@ -641,6 +643,175 @@ public class PingSmsPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("granted", NotificationManagerCompat.from(getContext()).areNotificationsEnabled());
         call.resolve(ret);
+    }
+
+
+    // ------------------------------------------------------------------
+    // First-launch setup: one permission group at a time, with a "blocked" state
+    // ------------------------------------------------------------------
+
+    private static final String SETUP_PREFS = "ping_setup";
+    private static final String NOTIFICATION_PERMISSION = "android.permission.POST_NOTIFICATIONS";
+
+    private String[] smsPermissionList() {
+        return new String[]{
+            Manifest.permission.READ_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.SEND_SMS
+        };
+    }
+
+    private boolean isPermissionGranted(String permission) {
+        return ContextCompat.checkSelfPermission(getContext(), permission) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean arePermissionsGranted(String[] permissions) {
+        for (String permission : permissions) {
+            if (!isPermissionGranted(permission)) return false;
+        }
+        return true;
+    }
+
+    private void markPermissionAsked(String group) {
+        getContext().getSharedPreferences(SETUP_PREFS, Context.MODE_PRIVATE).edit().putBoolean("asked_" + group, true).apply();
+    }
+
+    /**
+     * True when Android will no longer show the permission dialog for this group: it was asked before, it is still
+     * not granted, and shouldShowRequestPermissionRationale() is false for everything missing (the documented
+     * signal for "denied with don't-ask-again", which also covers a permission blocked by restricted settings).
+     */
+    private boolean isPermissionBlocked(String group, String[] permissions) {
+        if (arePermissionsGranted(permissions)) return false;
+        Activity activity = getActivity();
+        if (activity == null) return false;
+        boolean asked = getContext().getSharedPreferences(SETUP_PREFS, Context.MODE_PRIVATE).getBoolean("asked_" + group, false);
+        if (!asked) return false;
+        for (String permission : permissions) {
+            if (!isPermissionGranted(permission) && ActivityCompat.shouldShowRequestPermissionRationale(activity, permission)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private JSObject buildSetupStatus() {
+        Context context = getContext();
+        String[] smsPerms = smsPermissionList();
+        String[] contactPerms = new String[]{Manifest.permission.READ_CONTACTS};
+        boolean notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled();
+
+        // Notifications: below Android 13 there is no dialog, so "off" always means "turn it on in settings".
+        // On Android 13+ it is the same when the permission is granted but the app's notifications were switched off.
+        boolean notificationsBlocked = false;
+        if (!notificationsOn) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU || isPermissionGranted(NOTIFICATION_PERMISSION)) {
+                notificationsBlocked = true;
+            } else {
+                notificationsBlocked = isPermissionBlocked("notifications", new String[]{NOTIFICATION_PERMISSION});
+            }
+        }
+
+        JSObject ret = new JSObject();
+        ret.put("sms", arePermissionsGranted(smsPerms));
+        ret.put("smsBlocked", isPermissionBlocked("sms", smsPerms));
+        ret.put("contacts", arePermissionsGranted(contactPerms));
+        ret.put("contactsBlocked", isPermissionBlocked("contacts", contactPerms));
+        ret.put("notifications", notificationsOn);
+        ret.put("notificationsBlocked", notificationsBlocked);
+        ret.put("sdkInt", Build.VERSION.SDK_INT);
+        return ret;
+    }
+
+    /** Current state of every permission group the setup screens show. */
+    @PluginMethod
+    public void getSetupStatus(PluginCall call) {
+        call.resolve(buildSetupStatus());
+    }
+
+    /** Asks for Read / Receive / Send SMS only (not contacts or notifications). */
+    @PluginMethod
+    public void requestSmsPermission(PluginCall call) {
+        if (arePermissionsGranted(smsPermissionList())) {
+            call.resolve(buildSetupStatus());
+            return;
+        }
+        markPermissionAsked("sms");
+        requestPermissionForAlias("sms", call, "setupPermissionCallback");
+    }
+
+    /** Asks for Read Contacts only. */
+    @PluginMethod
+    public void requestContactsPermission(PluginCall call) {
+        if (isPermissionGranted(Manifest.permission.READ_CONTACTS)) {
+            call.resolve(buildSetupStatus());
+            return;
+        }
+        markPermissionAsked("contacts");
+        requestPermissionForAlias("contacts", call, "setupPermissionCallback");
+    }
+
+    /** Asks for notifications (Android 13+ dialog). Below Android 13 nothing can be asked: the app has to open settings. */
+    @PluginMethod
+    public void requestNotificationsPermission(PluginCall call) {
+        boolean enabled = NotificationManagerCompat.from(getContext()).areNotificationsEnabled();
+        if (enabled
+            || Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU
+            || isPermissionGranted(NOTIFICATION_PERMISSION)) {
+            call.resolve(buildSetupStatus());
+            return;
+        }
+        markPermissionAsked("notifications");
+        requestPermissionForAlias("notifications", call, "setupPermissionCallback");
+    }
+
+    @PermissionCallback
+    private void setupPermissionCallback(PluginCall call) {
+        call.resolve(buildSetupStatus());
+    }
+
+    /**
+     * Opens Android settings for Ping: target "app" = App Info (ACTION_APPLICATION_DETAILS_SETTINGS, where the
+     * permissions and, on Android 13+, "Allow restricted settings" live), target "notifications" = Ping's own
+     * notification settings. When Ping comes back to the foreground the web app is told through "appResumed".
+     */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        String target = call.getString("target", "app");
+        Context context = getContext();
+        Activity activity = getActivity();
+        try {
+            Intent intent;
+            if ("notifications".equals(target) && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+                intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
+            } else {
+                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                intent.setData(Uri.fromParts("package", context.getPackageName(), null));
+            }
+            if (activity != null) {
+                activity.startActivity(intent);
+            } else {
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                context.startActivity(intent);
+            }
+            call.resolve();
+        } catch (Exception first) {
+            // fall back to the App Info page
+            try {
+                Intent fallback = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                fallback.setData(Uri.fromParts("package", context.getPackageName(), null));
+                if (activity != null) {
+                    activity.startActivity(fallback);
+                } else {
+                    fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    context.startActivity(fallback);
+                }
+                call.resolve();
+            } catch (Exception second) {
+                call.reject("SETTINGS_UNAVAILABLE", second.getMessage());
+            }
+        }
     }
 
     /**

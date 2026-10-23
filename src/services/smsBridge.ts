@@ -37,6 +37,18 @@ export interface PermissionsStatus {
   allSmsGranted: boolean;
 }
 
+/** State of each permission group shown by the first-launch setup. "Blocked" = Android will not show the dialog any more. */
+export interface SetupStatus {
+  sms: boolean;
+  smsBlocked: boolean;
+  contacts: boolean;
+  contactsBlocked: boolean;
+  notifications: boolean;
+  notificationsBlocked: boolean;
+  /** Android version (API level); 0 outside the Android app */
+  sdkInt: number;
+}
+
 export interface DefaultSmsStatus {
   isDefault: boolean;
   packageName?: string;
@@ -52,6 +64,11 @@ interface PingSmsPluginInterface {
   readSms(options?: { limit?: number; after?: number; before?: number }): Promise<{ messages: NativeSmsMessage[]; count: number }>;
   getSmsYears(): Promise<{ years: { year: number; count: number }[] }>;
   requestNotificationPermission(): Promise<{ granted: boolean }>;
+  getSetupStatus(): Promise<SetupStatus>;
+  requestSmsPermission(): Promise<SetupStatus>;
+  requestContactsPermission(): Promise<SetupStatus>;
+  requestNotificationsPermission(): Promise<SetupStatus>;
+  openAppSettings(options?: { target?: 'app' | 'notifications' }): Promise<void>;
   markThreadRead(options: { address: string }): Promise<{ updated: number }>;
   setSystemBarsTheme(options: { dark: boolean; color?: string }): Promise<void>;
   getSystemColors(): Promise<SystemPalettes>;
@@ -206,6 +223,47 @@ export const smsBridge = {
     } catch (err) {
       console.warn('requestNotificationPermission failed:', err);
       return false;
+    }
+  },
+
+  /** Per-group permission state for the setup screens. Outside the Android app everything counts as granted. */
+  async getSetupStatus(): Promise<SetupStatus> {
+    const fallback: SetupStatus = {
+      sms: true,
+      smsBlocked: false,
+      contacts: true,
+      contactsBlocked: false,
+      notifications: true,
+      notificationsBlocked: false,
+      sdkInt: 0,
+    };
+    if (!isNativeAndroid()) return fallback;
+    try {
+      return await PingSms.getSetupStatus();
+    } catch (err) {
+      console.warn('getSetupStatus failed:', err);
+      return { ...fallback, sms: false, contacts: false, notifications: false };
+    }
+  },
+
+  async requestSetupPermission(group: 'sms' | 'contacts' | 'notifications'): Promise<SetupStatus> {
+    try {
+      if (group === 'sms') return await PingSms.requestSmsPermission();
+      if (group === 'contacts') return await PingSms.requestContactsPermission();
+      return await PingSms.requestNotificationsPermission();
+    } catch (err) {
+      console.warn('requestSetupPermission failed:', err);
+      return this.getSetupStatus();
+    }
+  },
+
+  /** Opens Android settings for Ping: its App Info page ("app") or its notification settings ("notifications"). */
+  async openAppSettings(target: 'app' | 'notifications' = 'app'): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.openAppSettings({ target });
+    } catch (err) {
+      console.warn('openAppSettings failed:', err);
     }
   },
 

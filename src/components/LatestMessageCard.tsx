@@ -50,7 +50,7 @@ export const LatestMessageCard: React.FC<LatestMessageCardProps> = ({ conversati
       transition={springBouncy}
       onClick={onOpen}
       {...pressProps}
-      className="mx-2 mb-3 p-5 rounded-[32px] bg-m3-primary-container/70 dark:bg-m3-primary-deep/40 border border-m3-primary/15 shadow-sm cursor-pointer"
+      className="mx-4 mb-3 p-5 rounded-[32px] bg-m3-primary-container/70 dark:bg-m3-primary-deep/40 border border-m3-primary/15 shadow-sm cursor-pointer"
     >
       {/* Who and when */}
       <div className="flex items-center gap-3.5">
