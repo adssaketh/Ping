@@ -3,10 +3,11 @@
 Ping is an open-source SMS app for Android with Material You colours, swipeable message categories, copy-OTP
 shortcuts, on-device spam protection and local backup and restore.
 
-<img width="8192" height="8192" alt="1000124946" src="https://github.com/user-attachments/assets/12468195-8bb6-472d-9843-2f7a618a0bfe" />
-<img width="8192" height="8192" alt="1000124945" src="https://github.com/user-attachments/assets/6d2ddafb-2108-4746-b4c3-f090388d36f5" />
 <img width="8192" height="8192" alt="1000124943" src="https://github.com/user-attachments/assets/32253691-cb5d-420c-abea-fd367c2b81a1" />
 <img width="8192" height="8192" alt="1000124944" src="https://github.com/user-attachments/assets/5bf0c023-46e3-4027-b362-ed76d8fee0d1" />
+<img width="8192" height="8192" alt="1000124946" src="https://github.com/user-attachments/assets/12468195-8bb6-472d-9843-2f7a618a0bfe" />
+<img width="8192" height="8192" alt="1000124945" src="https://github.com/user-attachments/assets/6d2ddafb-2108-4746-b4c3-f090388d36f5" />
+
 
 - **Open source:** the code in this repository is everything the app does.
 - **100% offline:** Ping never sends your messages, contacts or anything else off your phone.
