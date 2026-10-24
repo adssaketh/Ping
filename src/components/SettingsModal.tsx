@@ -1102,6 +1102,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {/* About & Version */}
           <div className="text-center py-2 text-xs text-m3-outline dark:text-m3-outline-dk space-y-1">
+            <img
+              src="/ping-icon.png"
+              alt="Ping"
+              decoding="async"
+              className="block w-14 h-14 mx-auto mb-2 rounded-2xl object-cover shadow-xs"
+            />
             <p className="font-semibold text-m3-on-surface dark:text-white">Ping - SMS Edition</p>
             <p className="text-[11px]">Open source · github.com/adssaketh/Ping</p>
             <p className="text-[11px]">

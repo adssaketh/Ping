@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Check, Code, Copy, Database, Heart, Wrench } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Database, Heart, Wrench } from 'lucide-react';
 import { spring, fadeFast } from '../motion.ts';
 import { copyText } from '../utils/clipboard.ts';
 
@@ -91,8 +91,8 @@ export const CreditsModal: React.FC<CreditsModalProps> = ({ isOpen, onClose }) =
                 transition={{ ...spring, delay: 0.08 }}
                 className="p-5 rounded-[28px] bg-m3-primary-container/70 dark:bg-m3-primary-deep/40"
               >
-                <div className="w-12 h-12 rounded-2xl bg-m3-primary text-white dark:bg-m3-primary-light dark:text-m3-on-primary-deep flex items-center justify-center mb-3">
-                  <Code className="w-6 h-6" />
+                <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-xs mb-3">
+                  <img src="/ping-icon.png" alt="Ping" decoding="async" className="w-full h-full object-cover" />
                 </div>
                 <h3 className="text-2xl font-bold tracking-tight text-m3-on-primary-deep dark:text-m3-primary-container">
                   Ping is open source

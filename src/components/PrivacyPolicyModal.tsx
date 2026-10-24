@@ -4,10 +4,8 @@ import {
   ArrowLeft,
   Bell,
   Baby,
-  FileText,
   Lock,
   Mail,
-  MessageSquare,
   RefreshCw,
   Send,
   ShieldCheck,
@@ -212,8 +210,8 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ ...spring, delay: 0.08 }}
               >
-                <div className="w-14 h-14 rounded-[20px] bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light flex items-center justify-center mb-4">
-                  <FileText className="w-7 h-7" />
+                <div className="w-14 h-14 rounded-[20px] overflow-hidden shadow-xs mb-4">
+                  <img src="/ping-icon.png" alt="Ping" decoding="async" className="w-full h-full object-cover" />
                 </div>
                 <h1 className="text-[32px] leading-9 font-bold tracking-tight text-m3-on-surface dark:text-white">
                   Your messages are yours
@@ -281,7 +279,7 @@ export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, 
               </div>
 
               <div className="mt-10 flex items-center gap-2 text-xs text-m3-outline dark:text-m3-outline-dk">
-                <MessageSquare className="w-4 h-4" />
+                <img src="/ping-icon.png" alt="" decoding="async" className="w-5 h-5 rounded-md object-cover" />
                 <span>Ping · Standard SMS</span>
               </div>
             </div>
