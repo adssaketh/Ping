@@ -24,3 +24,9 @@ The model is trained during the GitHub Actions build by `scripts/train-spam-mode
 
 See [ANDROID_BUILD_GUIDE.md](ANDROID_BUILD_GUIDE.md). The GitHub Action in `.github/workflows/build-android.yml`
 builds a debug APK.
+
+## License
+
+Ping is free software, licensed under the [GNU General Public License v3.0](LICENSE). Copyright (C) 2026 Saketh.
+You may use, study, share and change it. If you share a changed version, you must share its source code under the
+same license. Third-party credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

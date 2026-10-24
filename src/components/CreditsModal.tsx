@@ -101,6 +101,11 @@ export const CreditsModal: React.FC<CreditsModalProps> = ({ isOpen, onClose }) =
                   Its complete source code is public, so anyone can read it, check what it does with their messages,
                   report problems and suggest improvements.
                 </p>
+                <p className="mt-2 text-sm leading-relaxed text-m3-on-primary-deep/85 dark:text-m3-primary-container/85">
+                  Ping is free software, licensed under the GNU General Public License v3.0 (GPL-3.0): you may use,
+                  study, share and change it, and if you share a changed version you must share its source under
+                  the same license.
+                </p>
                 <LinkRow label="Ping source code" url={PING_REPO} />
               </motion.section>
 

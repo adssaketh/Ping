@@ -20,3 +20,7 @@ Ping. On the phone it also adapts to the user's own "Not spam" and "Report spam"
 
 Ping is built with open-source projects, each used under its own licence: React, Vite, Tailwind CSS, Motion,
 Lucide icons and Capacitor.
+
+## Ping's own license
+
+Ping itself is licensed under the GNU General Public License v3.0 (see the LICENSE file).
