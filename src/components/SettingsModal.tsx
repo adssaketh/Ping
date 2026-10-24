@@ -1105,7 +1105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <p className="font-semibold text-m3-on-surface dark:text-white">Ping - SMS Edition</p>
             <p className="text-[11px]">Open source · github.com/adssaketh/Ping</p>
             <p className="text-[11px]">
-              {appInfo ? `Version ${appInfo.versionName} (build ${appInfo.versionCode})` : 'Version 2.1'} · Material You Design 3
+              {appInfo ? `Version ${appInfo.versionName} (build ${appInfo.versionCode})` : 'Version 2.2'} · Material You Design 3
             </p>
           </div>
         </div>
