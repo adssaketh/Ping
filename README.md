@@ -1,7 +1,13 @@
-# Ping
+# Ping 💌
 
 Ping is an open-source SMS app for Android with Material You colours, swipeable message categories, copy-OTP
 shortcuts, on-device spam protection and local backup and restore.
+
+<img width="8192" height="8192" alt="1000124943" src="https://github.com/user-attachments/assets/32253691-cb5d-420c-abea-fd367c2b81a1" />
+<img width="8192" height="8192" alt="1000124944" src="https://github.com/user-attachments/assets/5bf0c023-46e3-4027-b362-ed76d8fee0d1" />
+<img width="8192" height="8192" alt="1000124946" src="https://github.com/user-attachments/assets/12468195-8bb6-472d-9843-2f7a618a0bfe" />
+<img width="8192" height="8192" alt="1000124945" src="https://github.com/user-attachments/assets/6d2ddafb-2108-4746-b4c3-f090388d36f5" />
+
 
 - **Open source:** the code in this repository is everything the app does.
 - **100% offline:** Ping never sends your messages, contacts or anything else off your phone.
@@ -18,8 +24,3 @@ The model is trained during the GitHub Actions build by `scripts/train-spam-mode
 
 See [ANDROID_BUILD_GUIDE.md](ANDROID_BUILD_GUIDE.md). The GitHub Action in `.github/workflows/build-android.yml`
 builds a debug APK.
-<img width="1264" height="2640" alt="1000124504" src="https://github.com/user-attachments/assets/27debaaa-584f-4375-adda-96d80429533b" />
-<img width="1264" height="2500" alt="1000124505" src="https://github.com/user-attachments/assets/614db565-c711-482d-8847-68651da05309" />
-<img width="1264" height="2632" alt="1000124506" src="https://github.com/user-attachments/assets/eb6d1b66-bf21-4fcf-b8f3-615da1276790" />
-<img width="1264" height="2624" alt="1000124507" src="https://github.com/user-attachments/assets/a921a55b-b15a-463d-8331-383686abf6bf" />
-

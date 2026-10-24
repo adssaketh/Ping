@@ -1,8 +1,8 @@
 # Ping Privacy Policy
 
-**Last updated: 22 October 2026**
+**Last updated: 24 October 2026**
 
-Ping is an open-source SMS app for Android. This page explains, in plain words, what Ping can see and what it does with it.
+Ping is an open-source SMS app for Android, developed by Saketh (adsaketh@gmail.com). This page explains, in plain words, what Ping can see and what it does with it.
 
 ## The short version
 
@@ -14,13 +14,13 @@ Ping is an open-source SMS app for Android. This page explains, in plain words, 
 
 ## What Ping can access, and why
 
-| Permission | Why |
-|---|---|
-| SMS and MMS (read, receive, send) | To show your conversations, deliver new messages and send the messages you write. |
-| Contacts (read only) | To show a name and picture instead of a bare phone number. Ping never changes your contacts. |
-| Notifications | To alert you to new messages and to offer a Copy OTP button. |
-| Vibrate, keep awake | To make notifications work reliably. |
-| Default SMS app role (optional) | Lets Ping receive messages and keep Android's own message store up to date, for example when you delete a message or mark it as read. |
+| Permission                        | Why                                                                                                                                   |
+|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
+| SMS and MMS (read, receive, send) | To show your conversations, deliver new messages and send the messages you write.                                                     |
+| Contacts (read only)              | To show a name and picture instead of a bare phone number. Ping never changes your contacts.                                          |
+| Notifications                     | To alert you to new messages and to offer a Copy OTP button.                                                                          |
+| Vibrate, keep awake               | To make notifications work reliably.                                                                                                  |
+| Default SMS app role (optional)   | Lets Ping receive messages and keep Android's own message store up to date, for example when you delete a message or mark it as read. |
 
 Android's standard internet permission is declared by the app framework. Ping does not use it to send your data anywhere.
 
@@ -68,16 +68,22 @@ Ping is a general-purpose messaging app and does not knowingly collect any infor
 
 ## Open source
 
-Ping is open source. Its code is public at https://github.com/adssaketh/Ping, so anyone can check that it does what this policy says.
+Ping is open source. Its code is public at [https://github.com/adssaketh/Ping](https://github.com/adssaketh/Ping), so anyone can check that it does what this policy says.
 
 ## Credits
 
-Spam protection is built from the Indian Telecom SMS Spam Collection by junioralive: https://github.com/junioralive/india-spam-sms-classification
+Spam protection is built from the Indian Telecom SMS Spam Collection by junioralive: [https://github.com/junioralive/india-spam-sms-classification](https://github.com/junioralive/india-spam-sms-classification)
 
 ## Changes to this policy
 
 If Ping's handling of data ever changes, this page will be updated and the date at the top will change. Ping will not start collecting data without telling you here first.
 
-## Contact
+## Contact and grievance officer
 
-Questions about privacy? Open an issue at https://github.com/adssaketh/Ping/issues
+**Developer and Grievance Officer:** Saketh
+
+**Email:** [adsaketh@gmail.com](mailto:adsaketh@gmail.com)
+
+You can write to this address with any question about privacy, to ask about or complain about how Ping handles data, or to report a problem with the app. We will acknowledge your message within 3 working days and aim to resolve it within one month.
+
+Questions that are not private can also be raised as an issue at [https://github.com/adssaketh/Ping/issues](https://github.com/adssaketh/Ping/issues). Please do not post personal information there; use the email address above for anything private.
