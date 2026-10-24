@@ -1,5 +1,5 @@
-import React, { startTransition, useCallback, useEffect, useState } from 'react';
-import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import React, { startTransition, useCallback, useEffect, useLayoutEffect, useState } from 'react';
+import { MotionConfig } from 'motion/react';
 import { Plus, Settings } from 'lucide-react';
 import { SMSProvider, useSMS } from './context/SMSContext.tsx';
 import { TopSearchBar } from './components/TopSearchBar.tsx';
@@ -8,7 +8,7 @@ import { ChatView } from './components/ChatView.tsx';
 import { NotificationBanner } from './components/NotificationBanner.tsx';
 import { BottomTabs } from './components/BottomTabs.tsx';
 import { InboxColumn } from './components/InboxColumn.tsx';
-import { spring, useIsDesktop } from './motion.ts';
+import { useIsDesktop } from './motion.ts';
 import { handleBackPress, useBackHandler } from './backStack.ts';
 import { smsBridge, isNativeAndroid } from './services/smsBridge.ts';
 import { OnboardingFlow } from './components/OnboardingFlow.tsx';
@@ -41,6 +41,36 @@ const TopSearchBarMemo = React.memo(TopSearchBar);
 const BottomTabsMemo = React.memo(BottomTabs);
 const ChatViewMemo = React.memo(ChatView);
 
+/**
+ * Slides a pane in and out with plain CSS transitions. Unlike a JavaScript spring, a CSS transform transition runs
+ * on the GPU compositor, so the slide stays smooth even while React is busy drawing the chat underneath it.
+ * `mounted`: render the pane at all. `shown`: it is in its final position (flips one frame after mounting).
+ */
+function useSlide(active: boolean, exitMs: number) {
+  const [mounted, setMounted] = useState(active);
+  const [shown, setShown] = useState(false);
+  useLayoutEffect(() => {
+    if (active) {
+      setMounted(true);
+      let raf2 = 0;
+      // one frame in the "off" position first, so the transition has a start to run from
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => setShown(true));
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        cancelAnimationFrame(raf2);
+      };
+    }
+    setShown(false);
+    const timer = window.setTimeout(() => setMounted(false), exitMs);
+    return () => window.clearTimeout(timer);
+  }, [active, exitMs]);
+  return { mounted, shown };
+}
+
+const SLIDE_MS = 320;
+
 const AppContent: React.FC = () => {
   const {
     activeConversationId,
@@ -58,6 +88,19 @@ const AppContent: React.FC = () => {
   // First-launch setup: opens by itself once (Android app only) and again from Settings
   const [setupOpen, setSetupOpen] = useState(() => isNativeAndroid() && !isSetupDone());
   const isDesktop = useIsDesktop();
+  const chatPane = useSlide(!!activeConversationId, SLIDE_MS + 40);
+  // Phones: the chat covers the whole inbox. Once the slide is done, the inbox underneath is hidden completely so the
+  // phone no longer paints (and blurs) a screen nobody can see; it is shown again before the chat slides out.
+  const chatCoversInbox = !!activeConversationId && !isDesktop;
+  const [inboxHidden, setInboxHidden] = useState(false);
+  useLayoutEffect(() => {
+    if (!chatCoversInbox) {
+      setInboxHidden(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setInboxHidden(true), SLIDE_MS + 60);
+    return () => window.clearTimeout(timer);
+  }, [chatCoversInbox]);
 
   // Stable callbacks: new function objects every render would defeat React.memo above
   const openNewChat = useCallback(() => startTransition(() => setNewChatOpen(true)), []);
@@ -196,13 +239,13 @@ const AppContent: React.FC = () => {
         {/* Split Screen Area */}
         <div className="flex-1 flex overflow-hidden min-h-0 relative">
           {/* Left Column: Conversation list (stays underneath the chat on phones) */}
-          <motion.div
+          <div
             className="w-full md:w-[360px] lg:w-[400px] xl:w-[420px] 2xl:w-[460px] shrink-0 border-r border-m3-line dark:border-m3-d4 flex flex-col h-full bg-m3-surface dark:bg-m3-d0"
-            animate={{
-              x: activeConversationId && !isDesktop ? -32 : 0,
-              opacity: activeConversationId && !isDesktop ? 0.55 : 1,
+            style={{
+              transform: chatCoversInbox ? 'translate3d(-32px,0,0)' : 'translate3d(0,0,0)',
+              transition: `transform ${SLIDE_MS}ms var(--ease-emphasized)`,
+              visibility: inboxHidden ? 'hidden' : 'visible',
             }}
-            transition={spring}
           >
             <InboxColumn
               top={
@@ -215,7 +258,7 @@ const AppContent: React.FC = () => {
               list={<ConversationListMemo onStartChat={openNewChat} />}
               bottom={<BottomTabsMemo />}
             />
-          </motion.div>
+          </div>
 
           {/* Right Column: chat slides over the list on phones, sits beside it on larger screens */}
           <div className="absolute inset-0 md:relative md:inset-auto md:flex-1 md:flex min-w-0 pointer-events-none bg-transparent">
@@ -255,20 +298,23 @@ const AppContent: React.FC = () => {
               </div>
 
             )}
-            <AnimatePresence initial={false}>
-              {activeConversationId && (
-                <motion.div
-                  key="chat-pane"
-                  className="pointer-events-auto absolute inset-0 flex flex-col bg-m3-surface dark:bg-m3-d0"
-                  initial={isDesktop ? { opacity: 0, x: 40 } : { x: '100%' }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={isDesktop ? { opacity: 0, x: 40 } : { x: '100%' }}
-                  transition={spring}
-                >
-                  <ChatViewMemo onBack={leaveChat} />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            {chatPane.mounted && (
+              <div
+                className="pointer-events-auto absolute inset-0 flex flex-col bg-m3-surface dark:bg-m3-d0"
+                style={{
+                  transform: chatPane.shown
+                    ? 'translate3d(0,0,0)'
+                    : isDesktop
+                      ? 'translate3d(40px,0,0)'
+                      : 'translate3d(100%,0,0)',
+                  opacity: isDesktop && !chatPane.shown ? 0 : 1,
+                  transition: `transform ${SLIDE_MS}ms var(--ease-emphasized), opacity 200ms linear`,
+                  willChange: 'transform',
+                }}
+              >
+                <ChatViewMemo onBack={leaveChat} />
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, startTransition } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy } from '../motion.ts';
 import {
@@ -45,6 +45,12 @@ import { AvatarCircle } from './AvatarCircle.tsx';
 interface ChatViewProps {
   onBack: () => void;
 }
+
+// Opening a chat: the first paint draws only the newest few messages so the slide starts at once;
+// the rest of the newest 80 are added a moment later, when the slide has finished.
+const FIRST_PAINT_MESSAGES = 16;
+const FULL_MESSAGES = 80;
+const FILL_IN_DELAY_MS = 380;
 
 export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
   const {
@@ -102,11 +108,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
       .sort((a, b) => a.timestamp - b.timestamp);
   }, [messages, activeConversation]);
 
-  // Long conversations: draw the newest 80 messages first (opening stays smooth), older ones on request
-  const [visibleCount, setVisibleCount] = useState(80);
+  // Long conversations: draw the newest messages first (opening stays smooth), older ones on request
+  const [visibleCount, setVisibleCount] = useState(FIRST_PAINT_MESSAGES);
   const feedRef = useRef<HTMLDivElement>(null);
   const scrollAnchor = useRef<number | null>(null);
-  const didInitialScroll = useRef(false);
   const useSMSJumpRef = useRef<string | null>(null);
   useSMSJumpRef.current = jumpToMessageId;
   const shownMessages = useMemo(
@@ -115,9 +120,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
   );
 
   useEffect(() => {
-    setVisibleCount(80);
-    didInitialScroll.current = false;
+    setVisibleCount(FIRST_PAINT_MESSAGES);
   }, [activeConversation?.id]);
+
+  // After the slide: add the rest of the newest 80, above what you see, without moving the screen
+  useEffect(() => {
+    if (visibleCount >= FULL_MESSAGES || convMessages.length <= visibleCount || useSMSJumpRef.current) return;
+    const timer = window.setTimeout(() => {
+      scrollAnchor.current = feedRef.current ? feedRef.current.scrollHeight : null;
+      startTransition(() => setVisibleCount(FULL_MESSAGES));
+    }, FILL_IN_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [activeConversation?.id, visibleCount, convMessages.length]);
 
   const showEarlier = () => {
     scrollAnchor.current = feedRef.current ? feedRef.current.scrollHeight : null;
@@ -152,13 +166,200 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jumpToMessageId, activeConversation?.id]);
 
-  // Scroll to the newest message: instantly when a chat opens, smoothly for new messages
+  // Scroll to the newest message: instantly, before the first paint, when a chat opens ...
+  const instantScrollFor = useRef<string | null>(null);
+  const justScrolledInstantly = useRef(false);
+  useLayoutEffect(() => {
+    const id = activeConversation?.id ?? null;
+    if (id && instantScrollFor.current !== id && !useSMSJumpRef.current && feedRef.current) {
+      instantScrollFor.current = id;
+      justScrolledInstantly.current = true;
+      feedRef.current.scrollTop = feedRef.current.scrollHeight;
+    }
+  });
+  // ... and smoothly for messages that arrive while it is open
   useEffect(() => {
-    const firstTime = !didInitialScroll.current;
-    didInitialScroll.current = true;
+    if (justScrolledInstantly.current) {
+      justScrolledInstantly.current = false;
+      return;
+    }
     if (useSMSJumpRef.current) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: firstTime ? 'auto' : 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [convMessages.length, activeConversation?.id]);
+
+  // Which messages arrived after the chat was drawn (only those get the little entrance animation)
+  const convId = activeConversation?.id ?? null;
+  const seenCount = useRef<{ conv: string | null; count: number }>({ conv: null, count: 0 });
+  const freshIds = useMemo(() => {
+    const fresh = new Set<string>();
+    if (seenCount.current.conv === convId && seenCount.current.count > 0 && convMessages.length > seenCount.current.count) {
+      for (const m of convMessages.slice(seenCount.current.count)) fresh.add(m.id);
+    }
+    return fresh;
+  }, [convMessages, convId]);
+  useLayoutEffect(() => {
+    seenCount.current = { conv: convId, count: convMessages.length };
+  }, [convMessages.length, convId]);
+
+  // The bubbles are built once per change of messages (not on every unrelated re-render of this screen).
+  // They call the latest handlers through this ref, so they never act on stale ones.
+  const bubbleActions = useRef({
+    handleCopyOtp: (_code: string) => {},
+    handleCopyText: (_text: string) => {},
+    cancelScheduled,
+    sendScheduledNow,
+    toggleStarMessage,
+    deleteMessage,
+  });
+  bubbleActions.current.cancelScheduled = cancelScheduled;
+  bubbleActions.current.sendScheduledNow = sendScheduledNow;
+  bubbleActions.current.toggleStarMessage = toggleStarMessage;
+  bubbleActions.current.deleteMessage = deleteMessage;
+
+  const bubbleNodes = useMemo(
+    () =>
+      shownMessages.map((msg) => {
+        const isMe = msg.sender === 'me';
+        const isScheduled = msg.isScheduled;
+        const otpCode = !isMe ? extractOtpCode(msg.text) : null;
+        const act = bubbleActions.current;
+
+        return (
+          <div
+            key={msg.id}
+            id={`msg-${msg.id}`}
+            className={`group/msg flex flex-col ${freshIds.has(msg.id) ? 'ping-bubble-in' : ''}`}
+            style={{ transformOrigin: isMe ? 'bottom right' : 'bottom left' }}
+          >
+              {/* Scheduled SMS Card */}
+              {isScheduled ? (
+                <div className="self-end max-w-[85%] sm:max-w-md p-3.5 rounded-2xl bg-m3-surface-hi dark:bg-m3-d2 border-2 border-dashed border-m3-primary/40 dark:border-m3-primary-light/40 shadow-xs mb-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-m3-primary dark:text-m3-primary-light mb-1">
+                    <Clock className="w-3.5 h-3.5 animate-spin" />
+                    <span>Scheduled for {msg.scheduledFor ? formatFullDateTime(msg.scheduledFor) : 'Later'}</span>
+                  </div>
+                  <p className="text-sm text-m3-on-surface dark:text-m3-on-surface-dk selectable-text leading-relaxed">
+                    {msg.text}
+                  </p>
+                  <div className="mt-2.5 flex items-center justify-end gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => act.cancelScheduled(msg.id)}
+                      className="px-2.5 py-1 text-[#BA1A1A] hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg font-medium"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => act.sendScheduledNow(msg.id)}
+                      className="px-3 py-1 bg-m3-primary text-white rounded-lg hover:bg-m3-primary-hover font-medium"
+                    >
+                      Send now
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Regular Sent / Received Message */
+                <div
+                  className={`flex items-end gap-1.5 max-w-[85%] sm:max-w-[70%] ${
+                    isMe ? 'self-end flex-row-reverse' : 'self-start'
+                  }`}
+                >
+                  {/* Bubble */}
+                  <div
+                    {...bindBubblePress(msg)}
+                    className={`relative p-3.5 text-sm leading-relaxed transition ${
+                      isMe
+                        ? 'bg-m3-primary-container dark:bg-m3-primary-deep text-m3-on-primary-deep dark:text-m3-primary-container rounded-2xl rounded-br-xs shadow-xs'
+                        : 'bg-white dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk rounded-2xl rounded-bl-xs border border-m3-line dark:border-m3-d4 shadow-xs'
+                    }`}
+                  >
+                    <p className="selectable-text break-words whitespace-pre-wrap">
+                      {msg.text}
+                    </p>
+
+                    {/* OTP / 2FA Quick Action Chip */}
+                    {otpCode && (
+                      <div className="mt-2.5 pt-2 border-t border-m3-line dark:border-m3-d4 flex items-center justify-between gap-3">
+                        <span className="text-xs font-mono font-bold tracking-widest text-m3-primary dark:text-m3-primary-light">
+                          {otpCode}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => act.handleCopyOtp(otpCode)}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover active:scale-95 transition shadow-xs"
+                        >
+                          {copiedCode === otpCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedCode === otpCode ? 'Copied' : 'Copy code'}</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Metadata line: Time, delivery status, and star */}
+                    <div
+                      className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] tabular-nums select-none ${
+                        isMe
+                          ? 'text-m3-on-primary-deep/70 dark:text-m3-primary-container/80'
+                          : 'text-m3-outline dark:text-m3-outline-dk'
+                      }`}
+                    >
+                      {msg.isStarred && (
+                        <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
+                      )}
+                      <span>{formatMessageDetailTime(msg.timestamp)}</span>
+                      {isMe && (
+                        <span>
+                          {msg.status === 'delivered' ? (
+                            <CheckCheck className="w-3 h-3 inline" />
+                          ) : msg.status === 'sent' ? (
+                            <Check className="w-3 h-3 inline" />
+                          ) : (
+                            <Clock className="w-2.5 h-2.5 inline animate-pulse" />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Micro action triggers (visible on hover) */}
+                  <div className="opacity-0 group-hover/msg:opacity-100 flex items-center gap-0.5 transition-opacity self-center">
+                    <button
+                      type="button"
+                      title={msg.isStarred ? 'Unstar' : 'Star'}
+                      onClick={() => act.toggleStarMessage(msg.id)}
+                      className="p-1 rounded-full text-m3-outline hover:text-amber-500 hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Star
+                        className={`w-3.5 h-3.5 ${
+                          msg.isStarred ? 'text-amber-500 fill-amber-500' : ''
+                        }`}
+                      />
+                    </button>
+                    <button
+                      type="button"
+                      title="Copy text"
+                      onClick={() => act.handleCopyText(msg.text)}
+                      className="p-1 rounded-full text-m3-outline hover:text-m3-on-surface dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      title="Delete"
+                      onClick={() => act.deleteMessage(msg.id)}
+                      className="p-1 rounded-full text-m3-outline hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+          </div>
+        );
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [shownMessages, copiedCode, freshIds, bindBubblePress]
+  );
 
   if (!activeConversation) {
     return (
@@ -221,8 +422,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  // Helper to extract 4-8 digit codes in bank/service SMS
-  const extractCode = (text: string) => extractOtpCode(text);
+  bubbleActions.current.handleCopyOtp = handleCopyOtp;
+  bubbleActions.current.handleCopyText = handleCopyText;
 
   // Quick SMS Smart Chips
   const quickReplies = [
@@ -461,7 +662,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
       </div>
 
       {/* Messages Scrollable Feed */}
-      <div ref={feedRef} className="flex-1 overflow-y-auto px-4 md:px-8 2xl:px-[10%] py-3 space-y-3">
+      <div
+        ref={feedRef}
+        className="flex-1 overflow-y-auto px-4 md:px-8 2xl:px-[10%] py-3 space-y-3"
+        // the app puts the scroll position right after adding older messages (see scrollAnchor); the browser must not also do it
+        style={{ overflowAnchor: 'none' }}
+      >
         {/* Spam warning */}
         {isSpamConversation(activeConversation.id) && (
           <motion.div
@@ -539,149 +745,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
             Show earlier messages ({convMessages.length - shownMessages.length})
           </button>
         )}
-        {shownMessages.map((msg, index) => {
-          const isMe = msg.sender === 'me';
-          const prevMsg = shownMessages[index - 1];
-          const isFirstInGroup = !prevMsg || prevMsg.sender !== msg.sender;
-          const isScheduled = msg.isScheduled;
-          const otpCode = !isMe ? extractCode(msg.text) : null;
-
-          return (
-            <motion.div
-              key={msg.id}
-              id={`msg-${msg.id}`}
-              className="group/msg flex flex-col"
-              initial={index >= shownMessages.length - 12 ? { opacity: 0, y: 14, scale: 0.94 } : false}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={spring}
-              style={{ transformOrigin: isMe ? 'bottom right' : 'bottom left' }}
-            >
-              {/* Scheduled SMS Card */}
-              {isScheduled ? (
-                <div className="self-end max-w-[85%] sm:max-w-md p-3.5 rounded-2xl bg-m3-surface-hi dark:bg-m3-d2 border-2 border-dashed border-m3-primary/40 dark:border-m3-primary-light/40 shadow-xs mb-2">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-m3-primary dark:text-m3-primary-light mb-1">
-                    <Clock className="w-3.5 h-3.5 animate-spin" />
-                    <span>Scheduled for {msg.scheduledFor ? formatFullDateTime(msg.scheduledFor) : 'Later'}</span>
-                  </div>
-                  <p className="text-sm text-m3-on-surface dark:text-m3-on-surface-dk selectable-text leading-relaxed">
-                    {msg.text}
-                  </p>
-                  <div className="mt-2.5 flex items-center justify-end gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => cancelScheduled(msg.id)}
-                      className="px-2.5 py-1 text-[#BA1A1A] hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg font-medium"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => sendScheduledNow(msg.id)}
-                      className="px-3 py-1 bg-m3-primary text-white rounded-lg hover:bg-m3-primary-hover font-medium"
-                    >
-                      Send now
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Regular Sent / Received Message */
-                <div
-                  className={`flex items-end gap-1.5 max-w-[85%] sm:max-w-[70%] ${
-                    isMe ? 'self-end flex-row-reverse' : 'self-start'
-                  }`}
-                >
-                  {/* Bubble */}
-                  <div
-                    {...bindBubblePress(msg)}
-                    className={`relative p-3.5 text-sm leading-relaxed transition ${
-                      isMe
-                        ? 'bg-m3-primary-container dark:bg-m3-primary-deep text-m3-on-primary-deep dark:text-m3-primary-container rounded-2xl rounded-br-xs shadow-xs'
-                        : 'bg-white dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk rounded-2xl rounded-bl-xs border border-m3-line dark:border-m3-d4 shadow-xs'
-                    }`}
-                  >
-                    <p className="selectable-text break-words whitespace-pre-wrap">
-                      {msg.text}
-                    </p>
-
-                    {/* OTP / 2FA Quick Action Chip */}
-                    {otpCode && (
-                      <div className="mt-2.5 pt-2 border-t border-m3-line dark:border-m3-d4 flex items-center justify-between gap-3">
-                        <span className="text-xs font-mono font-bold tracking-widest text-m3-primary dark:text-m3-primary-light">
-                          {otpCode}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleCopyOtp(otpCode)}
-                          className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-m3-primary text-white rounded-full hover:bg-m3-primary-hover active:scale-95 transition shadow-xs"
-                        >
-                          {copiedCode === otpCode ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                          <span>{copiedCode === otpCode ? 'Copied' : 'Copy code'}</span>
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Metadata line: Time, delivery status, and star */}
-                    <div
-                      className={`flex items-center justify-end gap-1.5 mt-1 text-[10px] tabular-nums select-none ${
-                        isMe
-                          ? 'text-m3-on-primary-deep/70 dark:text-m3-primary-container/80'
-                          : 'text-m3-outline dark:text-m3-outline-dk'
-                      }`}
-                    >
-                      {msg.isStarred && (
-                        <Star className="w-2.5 h-2.5 text-amber-500 fill-amber-500" />
-                      )}
-                      <span>{formatMessageDetailTime(msg.timestamp)}</span>
-                      {isMe && (
-                        <span>
-                          {msg.status === 'delivered' ? (
-                            <CheckCheck className="w-3 h-3 inline" />
-                          ) : msg.status === 'sent' ? (
-                            <Check className="w-3 h-3 inline" />
-                          ) : (
-                            <Clock className="w-2.5 h-2.5 inline animate-pulse" />
-                          )}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Micro action triggers (visible on hover) */}
-                  <div className="opacity-0 group-hover/msg:opacity-100 flex items-center gap-0.5 transition-opacity self-center">
-                    <button
-                      type="button"
-                      title={msg.isStarred ? 'Unstar' : 'Star'}
-                      onClick={() => toggleStarMessage(msg.id)}
-                      className="p-1 rounded-full text-m3-outline hover:text-amber-500 hover:bg-black/5 dark:hover:bg-white/10"
-                    >
-                      <Star
-                        className={`w-3.5 h-3.5 ${
-                          msg.isStarred ? 'text-amber-500 fill-amber-500' : ''
-                        }`}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      title="Copy text"
-                      onClick={() => handleCopyText(msg.text)}
-                      className="p-1 rounded-full text-m3-outline hover:text-m3-on-surface dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      title="Delete"
-                      onClick={() => deleteMessage(msg.id)}
-                      className="p-1 rounded-full text-m3-outline hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          );
-        })}
+        {bubbleNodes}
         <div ref={messagesEndRef} />
       </div>
 

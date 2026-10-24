@@ -686,6 +686,23 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return score;
   };
 
+  // Newest message from them, and whether you ever wrote back, per conversation. This only depends on the messages,
+  // so changing a conversation (like clearing its unread badge when you open it) never rescans every message.
+  const incomingIndex = useMemo(() => {
+    const lastIncoming = new Map<string, Message>();
+    const repliedTo = new Set<string>();
+    for (const m of messages) {
+      if (m.isScheduled) continue;
+      if (m.sender === 'me') {
+        repliedTo.add(m.conversationId);
+        continue;
+      }
+      const prev = lastIncoming.get(m.conversationId);
+      if (!prev || m.timestamp > prev.timestamp) lastIncoming.set(m.conversationId, m);
+    }
+    return { lastIncoming, repliedTo };
+  }, [messages]);
+
   const spamConversationIds = useMemo(() => {
     const spamIds = new Set<string>();
     if (!settings.spamProtectionEnabled || !spamModelReady) return spamIds;
@@ -700,18 +717,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const allow = new Set(settings.spamAllow.map(senderKey));
     const block = new Set(settings.spamBlock.map(senderKey));
 
-    // newest message from them, and whether you ever wrote back, per conversation
-    const lastIncoming = new Map<string, Message>();
-    const repliedTo = new Set<string>();
-    for (const m of messages) {
-      if (m.isScheduled) continue;
-      if (m.sender === 'me') {
-        repliedTo.add(m.conversationId);
-        continue;
-      }
-      const prev = lastIncoming.get(m.conversationId);
-      if (!prev || m.timestamp > prev.timestamp) lastIncoming.set(m.conversationId, m);
-    }
+    const { lastIncoming, repliedTo } = incomingIndex;
 
     for (const conv of conversations) {
       const key = senderKey(conv.phoneNumber);
@@ -730,7 +736,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     conversations,
-    messages,
+    incomingIndex,
     contacts,
     spamModelReady,
     settings.spamProtectionEnabled,
@@ -873,8 +879,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (id) {
       const target = conversationsRef.current.find((c) => c.id === id);
       if (target) smsBridge.markThreadRead(target.phoneNumber);
+      // Same list back when nothing is unread: no new array means no re-render of everything that reads it
       setConversations((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
+        prev.some((c) => c.id === id && c.unreadCount > 0)
+          ? prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c))
+          : prev
       );
       setActiveBanner((curr) => (curr?.conversationId === id ? null : curr));
     }
