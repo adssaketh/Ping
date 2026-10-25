@@ -117,6 +117,11 @@ export interface SmsAppSettings {
   spamLearned: Record<string, number>;
   emergencyAlerts: boolean;
 
+  /** Web links in messages can be tapped (Ping asks before opening one). Off: links stay plain text. */
+  tappableLinks: boolean;
+  /** Version of the privacy policy the user accepted during setup (see utils/policy.ts), or null if not yet */
+  privacyAcceptedVersion: string | null;
+
   // Display & UI
   showCategoriesTabs: boolean;
   themeMode: 'system' | 'light' | 'dark';

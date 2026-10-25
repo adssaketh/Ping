@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import {
   ArrowLeft,
+  ExternalLink,
   Bell,
   Baby,
   Lock,
@@ -16,16 +17,19 @@ import {
   WifiOff,
 } from 'lucide-react';
 import { spring, fadeFast } from '../motion.ts';
+import { PRIVACY_POLICY_DATE } from '../utils/policy.ts';
 
 interface PrivacyPolicyModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Stacking level; the setup screen uses a higher one so the policy opens above it */
+  zClass?: string;
 }
 
-const LAST_UPDATED = '21 October 2026';
+const LAST_UPDATED = PRIVACY_POLICY_DATE;
 
 const HIGHLIGHTS = [
-  { icon: WifiOff, title: 'Nothing leaves your phone', body: 'Ping never uploads your messages or contacts.' },
+  { icon: WifiOff, title: 'Nothing leaves your phone', body: 'Ping never uploads your messages or contacts. Links you tap open in your browser, after Ping asks.' },
   { icon: Users, title: 'No account needed', body: 'No sign-in, no profile, nothing to create.' },
   { icon: ShieldCheck, title: 'No ads or tracking', body: 'No analytics, no advertising, no data sold.' },
   { icon: Trash2, title: 'You are in control', body: 'Remove your data any time from Settings.' },
@@ -116,6 +120,21 @@ const SECTIONS: { icon: React.ElementType; title: string; body: React.ReactNode 
     ),
   },
   {
+    icon: ExternalLink,
+    title: 'Links in messages',
+    body: (
+      <p>
+        Web addresses in messages can be tapped. Ping first asks &ldquo;Open this link?&rdquo; and, only if you choose
+        Open, hands the address to your browser. Ping does not connect to the internet itself and never loads link
+        previews or visits links in the background. Once your browser opens a link, that website can see your
+        phone&rsquo;s IP address and the address you opened, and its own privacy policy applies. Links in text
+        messages are a common way for scams to reach people, so open only links you expected from senders you trust.
+        You can turn tappable links off in Settings, under SMS &amp; Messaging, or on the privacy step of the setup;
+        links then stay plain text.
+      </p>
+    ),
+  },
+  {
     icon: Trash2,
     title: 'Your choices',
     body: (
@@ -166,13 +185,13 @@ const SECTIONS: { icon: React.ElementType; title: string; body: React.ReactNode 
   },
 ];
 
-export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose }) => {
+export const PrivacyPolicyModal: React.FC<PrivacyPolicyModalProps> = ({ isOpen, onClose, zClass = 'z-[60]' }) => {
   return (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           key="privacy-overlay"
-          className="fixed inset-0 z-[60] flex items-center justify-center p-0 sm:p-4"
+          className={`fixed inset-0 ${zClass} flex items-center justify-center p-0 sm:p-4`}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

@@ -36,6 +36,8 @@ import {
 } from '../utils/smsUtils.ts';
 import { ScheduleModal } from './ScheduleModal.tsx';
 import { MessageActionSheet } from './MessageActionSheet.tsx';
+import { LinkSheet } from './LinkSheet.tsx';
+import { LinkText } from './LinkText.tsx';
 import { useLongPress } from '../utils/useLongPress.ts';
 import { useBackHandler } from '../backStack.ts';
 import { businessKey, isPhoneNumber } from '../utils/phone.ts';
@@ -76,6 +78,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     jumpToMessageId,
     setJumpToMessageId,
     setBusinessPhoto,
+    settings,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -90,7 +93,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [selectedMessageForAction, setSelectedMessageForAction] = useState<Message | null>(null);
-  const { bind: bindBubblePress } = useLongPress<Message>(setSelectedMessageForAction);
+  const { bind: bindBubblePress, consumeClick: consumeBubbleClick } = useLongPress<Message>(setSelectedMessageForAction);
+  // a tapped web link in a message: asks "Open this link?" before leaving the app
+  const [linkToOpen, setLinkToOpen] = useState<string | null>(null);
 
   // Android back button closes the open sheet / menu / dialog first
   useBackHandler(!!selectedMessageForAction, () => setSelectedMessageForAction(null));
@@ -210,11 +215,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     sendScheduledNow,
     toggleStarMessage,
     deleteMessage,
+    openLink: (_url: string) => {},
   });
   bubbleActions.current.cancelScheduled = cancelScheduled;
   bubbleActions.current.sendScheduledNow = sendScheduledNow;
   bubbleActions.current.toggleStarMessage = toggleStarMessage;
   bubbleActions.current.deleteMessage = deleteMessage;
+  bubbleActions.current.openLink = (url: string) => {
+    // the finger lifting after a long press must not also open the link
+    if (consumeBubbleClick()) return;
+    setLinkToOpen(url);
+  };
+
+  const tappableLinks = settings.tappableLinks !== false;
 
   const bubbleNodes = useMemo(
     () =>
@@ -275,7 +288,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                     }`}
                   >
                     <p className="selectable-text break-words whitespace-pre-wrap">
-                      {msg.text}
+                      <LinkText text={msg.text} onOpenLink={(url) => act.openLink(url)} enabled={tappableLinks} />
                     </p>
 
                     {/* OTP / 2FA Quick Action Chip */}
@@ -358,7 +371,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
         );
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shownMessages, copiedCode, freshIds, bindBubblePress]
+    [shownMessages, copiedCode, freshIds, bindBubblePress, tappableLinks]
   );
 
   if (!activeConversation) {
@@ -822,6 +835,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
       <MessageActionSheet
         message={selectedMessageForAction}
         onClose={() => setSelectedMessageForAction(null)}
+        onToast={showToast}
+      />
+
+      {/* "Open this link?" for web links tapped inside a message */}
+      <LinkSheet
+        url={linkToOpen}
+        warn={isSpamConversation(activeConversation.id)}
+        onClose={() => setLinkToOpen(null)}
         onToast={showToast}
       />
 

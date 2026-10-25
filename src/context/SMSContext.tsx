@@ -56,6 +56,8 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   spamBlock: [],
   spamLearned: {},
   emergencyAlerts: true,
+  tappableLinks: true,
+  privacyAcceptedVersion: null,
   showCategoriesTabs: true,
   themeMode: 'system',
 };

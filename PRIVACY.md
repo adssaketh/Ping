@@ -1,12 +1,13 @@
 # Ping Privacy Policy
 
-**Last updated: 24 October 2026**
+**Last updated: 25 October 2026**
 
 Ping is an open-source SMS app for Android, developed by Saketh (adsaketh@gmail.com). This page explains, in plain words, what Ping can see and what it does with it.
 
 ## The short version
 
 - Ping never uploads your messages, contacts or pictures anywhere.
+- Ping never connects to the internet itself. If you tap a link in a message, Ping asks first and only then hands it to your browser.
 - There is no account, no sign-in and no profile on a server.
 - There are no ads, no analytics and no tracking.
 - Spam detection runs entirely on your phone.
@@ -47,6 +48,12 @@ Text messages are sent through your mobile carrier, like in any SMS app. Your ca
 
 When a message looks like a one-time code, Ping finds the code on your phone and shows a Copy OTP button. Tapping it copies the code to your clipboard (marked as sensitive where Android supports it). Nothing is sent anywhere. Notifications can show message text on your lock screen depending on your Android settings.
 
+## Links in messages
+
+Web addresses in messages can be tapped. Before opening one, Ping shows an "Open this link?" prompt with the address, and only if you choose Open does it pass the address to your phone's browser. Ping does not connect to the internet itself, and it never loads link previews or visits links in the background.
+
+Once your browser opens a link, the website can see your phone's IP address and the address you opened, and some links contain a code that identifies you. That is between you and the website, and its own privacy policy applies. Links in text messages are a common way for scams to reach people, so only open links you expected, from senders you trust. If a chat looks like spam, the prompt warns you. You can turn tappable links off in Settings, under SMS & Messaging, or on the privacy step of the setup. Links then stay plain text.
+
 ## Backup and restore
 
 If you use Back up SMS, the file is saved where you choose. It contains your messages in plain, unencrypted text, so keep it somewhere safe.
@@ -73,6 +80,10 @@ Ping is open source. Its code is public at [https://github.com/adssaketh/Ping](h
 ## Credits
 
 Spam protection is built from the Indian Telecom SMS Spam Collection by junioralive: [https://github.com/junioralive/india-spam-sms-classification](https://github.com/junioralive/india-spam-sms-classification)
+
+## Accepting this policy
+
+When you first set up Ping, a screen shows a short summary of this policy and asks you to accept it. Your choice, and the date of the policy you accepted, are saved on your phone only.
 
 ## Changes to this policy
 

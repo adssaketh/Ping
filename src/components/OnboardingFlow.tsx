@@ -17,10 +17,12 @@ import { useSMS } from '../context/SMSContext.tsx';
 import { useBackHandler } from '../backStack.ts';
 import { springBouncy } from '../motion.ts';
 import { ThemePicker } from './ThemePicker.tsx';
+import { PrivacyPolicyModal } from './PrivacyPolicyModal.tsx';
+import { PRIVACY_POLICY_DATE, PRIVACY_POLICY_VERSION } from '../utils/policy.ts';
 import { getRestrictedAck, markSetupDone, setRestrictedAck } from '../utils/setupFlag.ts';
 
 type PermGroup = 'sms' | 'notifications' | 'contacts';
-type StepId = 'welcome' | 'theme' | 'restricted' | 'sms' | 'notifications' | 'contacts' | 'summary';
+type StepId = 'welcome' | 'privacy' | 'theme' | 'restricted' | 'sms' | 'notifications' | 'contacts' | 'summary';
 
 /** Wording matches PRIVACY.md: what each permission is for, and that contacts are read-only. */
 const PERM_COPY: Record<
@@ -62,7 +64,12 @@ const variants = {
 
 /* ------------------------------ small building blocks ------------------------------ */
 
-const IconBubble: React.FC<{ children: React.ReactNode; ring?: boolean; ok?: boolean }> = ({ children, ring, ok }) => (
+const IconBubble: React.FC<{ children: React.ReactNode; ring?: boolean; ok?: boolean; brand?: boolean }> = ({
+  children,
+  ring,
+  ok,
+  brand,
+}) => (
   <div className="relative w-28 h-28 flex items-center justify-center shrink-0">
     {ring && <span className="ob-ring absolute inset-2 rounded-[34px] bg-m3-primary/25 dark:bg-m3-primary-light/25" />}
     <motion.div
@@ -73,6 +80,18 @@ const IconBubble: React.FC<{ children: React.ReactNode; ring?: boolean; ok?: boo
     >
       {children}
     </motion.div>
+    {/* the Ping logo on the corner of every step's icon */}
+    {brand && (
+      <motion.img
+        src="/ping-icon.png"
+        alt=""
+        aria-hidden="true"
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ ...springBouncy, delay: 0.1 }}
+        className="absolute top-0 right-0 w-9 h-9 rounded-xl object-cover shadow-md border-2 border-m3-surface dark:border-m3-d0"
+      />
+    )}
     <AnimatePresence>
       {ok && (
         <motion.span
@@ -187,7 +206,10 @@ interface ScreenProps {
 }
 
 const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
-  const { settings, checkDefaultSmsApp, syncDeviceSmsAndContacts, requestNotificationPermission } = useSMS();
+  const { settings, updateSettings, checkDefaultSmsApp, syncDeviceSmsAndContacts, requestNotificationPermission } = useSMS();
+  const [policyOpen, setPolicyOpen] = useState(false);
+  // the privacy step must be accepted before anything else, so it can never be skipped until it is
+  const accepted = settings.privacyAcceptedVersion === PRIVACY_POLICY_VERSION;
   const native = isNativeAndroid();
 
   const [status, setStatus] = useState<SetupStatus | null>(null);
@@ -203,10 +225,13 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
   const sdkInt = status?.sdkInt ?? 0;
   const showRestricted = native && sdkInt >= 33;
   const steps: StepId[] = useMemo(
-    () => ['welcome', 'theme', ...(showRestricted ? (['restricted'] as StepId[]) : []), 'sms', 'notifications', 'contacts', 'summary'],
+    () => ['welcome', 'privacy', 'theme', ...(showRestricted ? (['restricted'] as StepId[]) : []), 'sms', 'notifications', 'contacts', 'summary'],
     [showRestricted]
   );
   const index = Math.max(0, steps.indexOf(stepId));
+  // "Skip" (top right) skips only the step you are on and moves to the next one. Not on the welcome step (it has its own
+  // button), not on the last step, and not on the privacy step until the policy has been accepted.
+  const canSkip = stepId !== 'welcome' && stepId !== 'summary' && (stepId !== 'privacy' || accepted);
 
   const goTo = useCallback(
     (to: StepId) => {
@@ -297,6 +322,7 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
     } catch {}
   };
 
+  useBackHandler(policyOpen, () => setPolicyOpen(false));
   useBackHandler(true, () => {
     if (stepRef.current !== 'welcome') goPrev();
     else smsBridge.minimizeApp();
@@ -320,8 +346,8 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
                 </IconBubble>
                 <Title>Welcome to Ping</Title>
                 <Body>
-                  A quick setup gets Ping ready: your theme and a few permissions. Everything is optional, and your
-                  messages stay on your phone.
+                  A quick setup gets Ping ready: a short privacy summary, your theme and a few permissions. Apart from
+                  accepting the privacy policy, everything is optional, and your messages stay on your phone.
                 </Body>
               </>
             }
@@ -329,12 +355,99 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
           />
         );
 
+      case 'privacy': {
+        const linksOn = settings.tappableLinks;
+        return (
+          <StepLayout
+            body={
+              <>
+                <IconBubble ok={accepted}>
+                  <img src="/ping-icon.png" alt="" className="w-16 h-16 rounded-2xl object-cover" />
+                </IconBubble>
+                <Title>Your privacy</Title>
+                <Body>The short version of Ping&rsquo;s privacy policy. Please read it and accept to continue.</Body>
+
+                <div className="w-full max-w-sm mt-5 space-y-3">
+                  <Card>
+                    <ul className="space-y-2.5">
+                      {[
+                        'Your messages and contacts stay on your phone. Ping never uploads them.',
+                        'No account, no ads, no analytics, no tracking.',
+                        'Spam protection runs on your phone.',
+                        'You can erase Ping\u2019s data at any time.',
+                      ].map((line) => (
+                        <li key={line} className="flex items-start gap-2.5">
+                          <Check className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                          <span className="text-m3-on-surface dark:text-m3-on-surface-dk">{line}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </Card>
+
+                  {/* the choice: tappable links, ON by default */}
+                  <Card>
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light">
+                        <ExternalLink className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-m3-on-surface dark:text-m3-on-surface-dk">Tappable links in messages</p>
+                        <p className="mt-0.5 text-xs leading-relaxed">
+                          {linksOn
+                            ? 'On: web links in messages can be tapped. Ping always asks before opening one in your browser.'
+                            : 'Off: links stay plain text and cannot be tapped.'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={linksOn}
+                        aria-label="Tappable links in messages"
+                        onClick={() => updateSettings({ tappableLinks: !linksOn })}
+                        className={`w-11 h-6 mt-1 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                          linksOn ? 'bg-m3-primary' : 'bg-m3-variant-dk dark:bg-m3-variant'
+                        }`}
+                      >
+                        <div className={`w-5 h-5 rounded-full bg-white transition-transform ${linksOn ? 'translate-x-5' : 'translate-x-0'}`} />
+                      </button>
+                    </div>
+                    <p className="mt-3 text-[11px] leading-relaxed">
+                      You can change this any time in Settings, under SMS &amp; Messaging.
+                    </p>
+                  </Card>
+
+                  <p className="px-2 text-center text-[11px] leading-relaxed text-m3-outline dark:text-m3-outline-dk">
+                    {accepted
+                      ? `You accepted the privacy policy dated ${PRIVACY_POLICY_DATE}.`
+                      : `By tapping Accept you agree to Ping\u2019s privacy policy (${PRIVACY_POLICY_DATE}).`}
+                  </p>
+                </div>
+              </>
+            }
+            actions={
+              <>
+                <PrimaryButton
+                  onClick={() => {
+                    if (!accepted) updateSettings({ privacyAcceptedVersion: PRIVACY_POLICY_VERSION });
+                    goNext();
+                  }}
+                >
+                  {accepted ? 'Continue' : 'Accept and continue'}
+                </PrimaryButton>
+                <TonalButton onClick={() => setPolicyOpen(true)}>Read the full privacy policy</TonalButton>
+                {!accepted && <TextButton onClick={() => void smsBridge.minimizeApp()}>Decline and leave Ping</TextButton>}
+              </>
+            }
+          />
+        );
+      }
+
       case 'theme':
         return (
           <StepLayout
             body={
               <>
-                <IconBubble>
+                <IconBubble brand>
                   <Palette className="w-11 h-11" strokeWidth={1.8} />
                 </IconBubble>
                 <Title>Choose your look</Title>
@@ -353,7 +466,7 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
           <StepLayout
             body={
               <>
-                <IconBubble ring={!restrictedAck} ok={restrictedAck}>
+                <IconBubble brand ring={!restrictedAck} ok={restrictedAck}>
                   <ShieldCheck className="w-11 h-11" strokeWidth={1.8} />
                 </IconBubble>
                 <Title>Allow restricted settings</Title>
@@ -424,7 +537,7 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
           <StepLayout
             body={
               <>
-                <IconBubble ring={!ok} ok={ok}>
+                <IconBubble brand ring={!ok} ok={ok}>
                   <copy.Icon className="w-11 h-11" strokeWidth={1.8} />
                 </IconBubble>
                 <Title>{copy.title}</Title>
@@ -508,7 +621,7 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
           <StepLayout
             body={
               <>
-                <IconBubble ok={missing === 0}>
+                <IconBubble brand ok={missing === 0}>
                   <Sparkles className="w-11 h-11" strokeWidth={1.8} />
                 </IconBubble>
                 <Title>{missing === 0 ? 'You’re all set' : 'Almost there'}</Title>
@@ -607,17 +720,20 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
           ))}
         </div>
         <div className="w-24 flex justify-end">
-          {stepId !== 'summary' && (
+          {canSkip && (
             <button
               type="button"
-              onClick={finish}
+              onClick={goNext}
+              aria-label="Skip this step"
               className="px-3 min-h-11 rounded-full text-sm font-semibold text-m3-variant dark:text-m3-variant-dk"
             >
-              Skip setup
+              Skip
             </button>
           )}
         </div>
       </div>
+
+      <PrivacyPolicyModal isOpen={policyOpen} onClose={() => setPolicyOpen(false)} zClass="z-[130]" />
 
       {/* the step */}
       <div className="relative z-10 flex-1 min-h-0">
@@ -641,8 +757,8 @@ const OnboardingScreen: React.FC<ScreenProps> = ({ onFinish }) => {
 };
 
 /**
- * Full-screen first-launch setup. It opens on the first run and again from Settings, and it never blocks the app:
- * every step can be skipped and "Skip setup" is always one tap away.
+ * Full-screen first-launch setup. It opens on the first run and again from Settings. Every step except the privacy
+ * policy can be skipped: "Skip" (top right) moves on to the next step.
  */
 export const OnboardingFlow: React.FC<{ open: boolean; onFinish: () => void }> = ({ open, onFinish }) => (
   <AnimatePresence>{open && <OnboardingScreen onFinish={onFinish} />}</AnimatePresence>

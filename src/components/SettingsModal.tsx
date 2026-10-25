@@ -850,6 +850,34 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               </button>
             </div>
 
+            {/* Tappable links */}
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-m3-line/70 dark:border-m3-d4/70">
+              <div>
+                <p className="text-sm font-medium text-m3-on-surface dark:text-white">Tappable links in messages</p>
+                <p className="text-xs text-m3-outline dark:text-m3-outline-dk">
+                  {settings.tappableLinks
+                    ? 'On: web links in messages are underlined and can be tapped. Ping asks before opening one in your browser.'
+                    : 'Off: links stay plain text and cannot be tapped. You can still copy a message and paste the link yourself.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.tappableLinks}
+                aria-label="Tappable links in messages"
+                onClick={() => updateSettings({ tappableLinks: !settings.tappableLinks })}
+                className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                  settings.tappableLinks ? 'bg-m3-primary' : 'bg-m3-variant-dk dark:bg-m3-variant'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                    settings.tappableLinks ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Emergency alerts */}
             <div className="flex items-center justify-between pt-2 border-t border-m3-line/70 dark:border-m3-d4/70">
               <div>
