@@ -174,6 +174,8 @@ interface SMSContextType {
   pickAndRestoreSms: () => Promise<{ ok: boolean; message: string }>;
   /** How many transaction SMS fall in a date range (milliseconds, both ends included). */
   countPaddhuExport: (fromMs: number, toMs: number) => number;
+  /** Opens Paddhu Pusthakam with one message (the long-press option "Add to Paddhu Pusthakam"). */
+  sendMessageToPaddhu: (messageId: string) => Promise<{ ok: boolean; message: string }>;
   /** Opens the share sheet with the transaction SMS of a date range, to send them to Paddhu Pusthakam. */
   sendTransactionsToPaddhu: (fromMs: number, toMs: number) => Promise<{ ok: boolean; message: string }>;
   cleanExpiredOtps: () => number;
@@ -1346,6 +1348,34 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [isNativePlatform, paddhuExportRows]
   );
 
+  const sendMessageToPaddhu = useCallback(
+    async (messageId: string): Promise<{ ok: boolean; message: string }> => {
+      try {
+        const m = messagesRef.current.find((x) => x.id === messageId);
+        if (!m) return { ok: false, message: 'Message not found' };
+        if (m.sender === 'me') return { ok: false, message: 'Only received messages can be added' };
+        if (!isNativePlatform) return { ok: false, message: 'Adding to Paddhu Pusthakam works in the Android app only' };
+        const conv = conversationsRef.current.find((c) => c.id === m.conversationId);
+        const id = m.id.startsWith(DEVICE_ID_PREFIX) ? m.id.slice(DEVICE_ID_PREFIX.length) : `ping-${m.id}`;
+        const json = JSON.stringify({
+          app: 'Ping',
+          type: 'paddhu-sms-export',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          from: m.timestamp,
+          to: m.timestamp,
+          sms: [{ id, address: conv?.phoneNumber ?? 'Unknown', body: m.text, date: m.timestamp }],
+        });
+        const res = await smsBridge.sendSmsToPaddhu(json);
+        return res.opened ? { ok: true, message: 'Opening Paddhu Pusthakam' } : { ok: false, message: 'Could not open Paddhu Pusthakam' };
+      } catch (err) {
+        appLog('paddhu single send: FAILED', err);
+        return { ok: false, message: err instanceof Error ? err.message : 'Could not open Paddhu Pusthakam' };
+      }
+    },
+    [isNativePlatform]
+  );
+
   const restoreSmsFromJson = useCallback(
     async (jsonData: string): Promise<{ ok: boolean; message: string }> => {
       let data: any;
@@ -2059,6 +2089,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     startNewConversation,
     backupSmsToFile,
     countPaddhuExport,
+    sendMessageToPaddhu,
     sendTransactionsToPaddhu,
     restoreSmsFromJson,
     pickAndRestoreSms,

@@ -581,6 +581,29 @@ public class PingSmsPlugin extends Plugin {
     }
 
     /**
+     * Opens Paddhu Pusthakam straight away with one SMS (a small JSON text, see PaddhuShare): used by the long-press
+     * option "Add to Paddhu Pusthakam" on a message.
+     */
+    @PluginMethod
+    public void sendSmsToPaddhu(PluginCall call) {
+        String json = call.getString("json", "");
+        if (json == null || json.isEmpty()) {
+            call.reject("There is nothing to send");
+            return;
+        }
+        try {
+            getActivity().startActivity(PaddhuShare.intentFor(json));
+            JSObject ret = new JSObject();
+            ret.put("opened", true);
+            call.resolve(ret);
+        } catch (android.content.ActivityNotFoundException e) {
+            call.reject("Paddhu Pusthakam is not installed on this phone");
+        } catch (Throwable e) {
+            call.reject("Could not open Paddhu Pusthakam: " + e.getMessage());
+        }
+    }
+
+    /**
      * Lets the user pick where to save a backup file, then streams the backup into it.
      * The phone's SMS are read straight from Android's store into the file one row at a time, so a large
      * inbox never has to fit in memory (or cross the web bridge) as one huge string.

@@ -82,6 +82,7 @@ interface PingSmsPluginInterface {
   exitApp(): Promise<void>;
   stageBackupData(options: { chunk: string; reset?: boolean; target?: 'filter' | 'share' }): Promise<void>;
   shareStagedFile(options?: { title?: string }): Promise<{ shared: boolean }>;
+  sendSmsToPaddhu(options: { json: string }): Promise<{ opened: boolean }>;
   saveBackupFile(options: { fileName: string; includeSms: boolean; filtered?: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }>;
@@ -336,6 +337,12 @@ export const smsBridge = {
       i = end;
     }
     return PingSms.shareStagedFile({ title });
+  },
+
+  /** Opens Paddhu Pusthakam straight away with one SMS (a small JSON text), without the share sheet. */
+  async sendSmsToPaddhu(json: string): Promise<{ opened: boolean }> {
+    if (!isNativeAndroid()) return { opened: false };
+    return PingSms.sendSmsToPaddhu({ json });
   },
 
   /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */

@@ -74,10 +74,10 @@ public class SmsReceiver extends BroadcastReceiver {
         PingSmsPlugin.notifyIncomingSms(sender, body, timestamp, subscriptionId);
 
         // 3. Show System Notification
-        showNotification(context, sender, body);
+        showNotification(context, sender, body, timestamp);
     }
 
-    private void showNotification(Context context, String sender, String body) {
+    private void showNotification(Context context, String sender, String body, long timestamp) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (manager == null) return;
 
@@ -142,6 +142,19 @@ public class SmsReceiver extends BroadcastReceiver {
             copyIntent.putExtra(CopyOtpReceiver.EXTRA_NOTIFICATION_ID, notificationId);
             PendingIntent copyPending = PendingIntent.getBroadcast(context, notificationId, copyIntent, flags);
             builder.addAction(new NotificationCompat.Action.Builder(0, "Copy OTP " + otp, copyPending).build());
+        }
+
+        // "Add to Paddhu" button for bank and payment messages: opens Paddhu Pusthakam with the transaction prefilled.
+        // (Android hides OTP-like notification text from other apps, so Ping hands the SMS over itself.)
+        if (!spam && !PaddhuShare.looksLikePhoneNumber(sender) && PaddhuShare.isTransactionSms(body)) {
+            try {
+                String smsId = "n" + timestamp + "-" + Integer.toHexString(body.hashCode());
+                Intent paddhuIntent = PaddhuShare.intentFor(PaddhuShare.exportJson(smsId, sender, body, timestamp));
+                PendingIntent paddhuPending = PendingIntent.getActivity(context, notificationId + 1, paddhuIntent, flags);
+                builder.addAction(new NotificationCompat.Action.Builder(0, "Add to Paddhu", paddhuPending).build());
+            } catch (Exception ignored) {
+                // no button if the message could not be packed
+            }
         }
 
         manager.notify(notificationId, builder.build());

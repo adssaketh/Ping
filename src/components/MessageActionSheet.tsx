@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { Check, Copy, Info, KeyRound, Star, Trash2 } from 'lucide-react';
+import { Check, Copy, Info, KeyRound, Star, Trash2, Wallet } from 'lucide-react';
 import { useSMS } from '../context/SMSContext.tsx';
 import { Message } from '../types.ts';
 import { calculateSmsCount, extractOtpCode, formatFullDateTime } from '../utils/smsUtils.ts';
@@ -16,7 +16,7 @@ interface MessageActionSheetProps {
 
 /** Bottom sheet for a single message, opened by long-pressing its bubble. */
 export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({ message, onClose, onToast }) => {
-  const { toggleStarMessage, deleteMessage, messages } = useSMS();
+  const { toggleStarMessage, deleteMessage, messages, sendMessageToPaddhu } = useSMS();
   const [showDetails, setShowDetails] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -111,6 +111,20 @@ export const MessageActionSheet: React.FC<MessageActionSheetProps> = ({ message,
                     <Copy className="w-5 h-5 text-m3-variant dark:text-m3-variant-dk" />
                     <span>Copy text</span>
                   </button>
+                  {!isMe && (
+                    <button
+                      type="button"
+                      className={rowClass}
+                      onClick={async () => {
+                        const result = await sendMessageToPaddhu(live.id);
+                        onToast?.(result.message);
+                        onClose();
+                      }}
+                    >
+                      <Wallet className="w-5 h-5 text-m3-variant dark:text-m3-variant-dk" />
+                      <span>Add to Paddhu Pusthakam</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={rowClass}
