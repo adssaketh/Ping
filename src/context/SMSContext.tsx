@@ -13,6 +13,7 @@ import { appLog } from '../utils/appLog.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
 import { businessKey, isPhoneNumber, phoneKey } from '../utils/phone.ts';
 import { dedupeContacts } from '../utils/contactSearch.ts';
+import { indexInstruments, instrumentLabel, isClosedInstrument } from '../utils/instrument.ts';
 import {
   loadSpamModel,
   scoreSms,
@@ -130,6 +131,8 @@ interface SMSContextType {
   setJumpToMessageId: (id: string | null) => void;
   unreadCounts: { all: number; personal: number; transactions: number; services: number; promotions: number };
   isSpamConversation: (conversationId: string) => boolean;
+  /** Which bank account / card / wallet a transaction message is about (null when it does not say). */
+  instrumentOfMessage: (messageId: string) => { key: string; label: string; closed: boolean } | null;
   markNotSpam: (conversationId: string) => void;
   reportSpam: (conversationId: string) => void;
 
@@ -1880,7 +1883,31 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .sort((a, b) => b.timestamp - a.timestamp);
   }, [messages, conversations]);
 
+  // Which account / card / wallet each transaction message belongs to (only transaction conversations are looked at)
+  const instrumentIndex = useMemo(() => {
+    const senderByConv = new Map<string, string>();
+    for (const c of conversations) if (c.category === 'transactions') senderByConv.set(c.id, c.phoneNumber);
+    const convOfMsg = new Map<string, string>();
+    const list: Array<{ id: string; text: string }> = [];
+    for (const m of messages) {
+      const addr = senderByConv.get(m.conversationId);
+      if (addr === undefined || m.sender === 'me') continue;
+      convOfMsg.set(m.id, addr);
+      list.push({ id: m.id, text: m.text });
+    }
+    return indexInstruments(list, (id) => convOfMsg.get(id) || '');
+  }, [conversations, messages]);
+  const instrumentOfMessage = useCallback(
+    (messageId: string) => {
+      const key = instrumentIndex.get(messageId);
+      const label = key ? instrumentLabel(key) : null;
+      return key && label ? { key, label, closed: isClosedInstrument(key) } : null;
+    },
+    [instrumentIndex]
+  );
+
   const value = {
+    instrumentOfMessage,
     conversations,
     messages,
     contacts,

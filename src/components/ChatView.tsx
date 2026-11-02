@@ -79,6 +79,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     setJumpToMessageId,
     setBusinessPhoto,
     settings,
+    instrumentOfMessage,
   } = useSMS();
 
   // Keep showing the last conversation while the chat pane slides out
@@ -216,7 +217,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
     toggleStarMessage,
     deleteMessage,
     openLink: (_url: string) => {},
+    instrumentOf: instrumentOfMessage,
   });
+  bubbleActions.current.instrumentOf = instrumentOfMessage;
   bubbleActions.current.cancelScheduled = cancelScheduled;
   bubbleActions.current.sendScheduledNow = sendScheduledNow;
   bubbleActions.current.toggleStarMessage = toggleStarMessage;
@@ -236,6 +239,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
         const isScheduled = msg.isScheduled;
         const otpCode = !isMe ? extractOtpCode(msg.text) : null;
         const act = bubbleActions.current;
+        const inst = !isMe ? act.instrumentOf(msg.id) : null;
 
         return (
           <div
@@ -287,6 +291,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
                         : 'bg-white dark:bg-m3-d2 text-m3-on-surface dark:text-m3-on-surface-dk rounded-2xl rounded-bl-xs border border-m3-line dark:border-m3-d4 shadow-xs'
                     }`}
                   >
+                    {inst && (
+                      <span
+                        className={`inline-block mb-1.5 text-[10px] px-1.5 py-0.5 rounded font-semibold ${
+                          inst.closed
+                            ? 'bg-m3-surface-hi dark:bg-m3-d3 text-m3-outline dark:text-m3-outline-dk'
+                            : 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300'
+                        }`}
+                      >
+                        {inst.label}
+                        {inst.closed ? ' \u00b7 closed' : ''}
+                      </span>
+                    )}
                     <p className="selectable-text break-words whitespace-pre-wrap">
                       <LinkText text={msg.text} onOpenLink={(url) => act.openLink(url)} enabled={tappableLinks} />
                     </p>
@@ -371,7 +387,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ onBack }) => {
         );
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [shownMessages, copiedCode, freshIds, bindBubblePress, tappableLinks]
+    [shownMessages, copiedCode, freshIds, bindBubblePress, tappableLinks, instrumentOfMessage]
   );
 
   if (!activeConversation) {
