@@ -1216,48 +1216,35 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ---------------------------------------------------------------
   const backupSmsToFile = useCallback(async (): Promise<{ ok: boolean; message: string }> => {
     try {
-      // The phone's own messages (all of them), when Ping may read them
-      let deviceSms: BackupSms[] = [];
+      const fileName = `ping-sms-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const appData = { conversations: conversationsRef.current, messages: messagesRef.current, contacts };
+
       if (isNativePlatform) {
+        // The phone's messages are streamed into the file natively (not loaded into the web layer), so even a
+        // very large inbox can't run the app out of memory. We only send the app's own data across the bridge.
         const perms = await smsBridge.checkPermissions();
-        if (perms.readSms) {
-          const raw = await smsBridge.readDeviceSms(200000);
-          deviceSms = raw.map((m) => ({
-            address: m.address,
-            body: m.body,
-            date: m.date,
-            isSent: m.isSent,
-            isRead: m.isRead,
-          }));
-        }
+        const extra = JSON.stringify(appData).slice(1, -1); // JSON members without the outer { }
+        const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms);
+        if (!res.saved) return { ok: false, message: 'Backup cancelled' };
+        const count = res.count || messagesRef.current.length;
+        return { ok: true, message: `Backed up ${count} messages` };
       }
 
-      const backup = {
+      const json = JSON.stringify({
         app: 'Ping',
         version: 3,
         createdAt: new Date().toISOString(),
-        sms: deviceSms,
-        conversations: conversationsRef.current,
-        messages: messagesRef.current,
-        contacts,
-      };
-      const json = JSON.stringify(backup);
-      const fileName = `ping-sms-backup-${new Date().toISOString().slice(0, 10)}.json`;
-
-      if (isNativePlatform) {
-        const res = await smsBridge.saveBackupFile(fileName, json);
-        if (!res.saved) return { ok: false, message: 'Backup cancelled' };
-      } else {
-        const blob = new Blob([json], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
-      }
-      const count = deviceSms.length || messagesRef.current.length;
-      return { ok: true, message: `Backed up ${count} messages` };
+        sms: [],
+        ...appData,
+      });
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+      return { ok: true, message: `Backed up ${messagesRef.current.length} messages` };
     } catch (err) {
       return { ok: false, message: `Backup failed: ${err instanceof Error ? err.message : 'unknown error'}` };
     }

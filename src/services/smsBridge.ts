@@ -80,7 +80,7 @@ interface PingSmsPluginInterface {
   readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
   showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
-  saveBackupFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
+  saveBackupFile(options: { fileName: string; extra: string; includeSms: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   restoreSms(options: { messages: BackupSms[] }): Promise<{ inserted: number; skipped: number }>;
   setSpamConfig(options: { enabled: boolean; threshold: number; allow: string[]; block: string[]; learned: Record<string, number> }): Promise<void>;
@@ -276,9 +276,12 @@ export const smsBridge = {
     }
   },
 
-  /** Opens Android's "save as" picker and writes the backup text to the chosen file. */
-  async saveBackupFile(fileName: string, content: string): Promise<{ saved: boolean }> {
-    return PingSms.saveBackupFile({ fileName, content });
+  /**
+   * Opens Android's "save as" picker, then writes the backup. The phone's SMS are streamed into the file
+   * natively; `extra` holds the app's own data as JSON members (no outer braces).
+   */
+  async saveBackupFile(fileName: string, extra: string, includeSms: boolean): Promise<{ saved: boolean; count?: number }> {
+    return PingSms.saveBackupFile({ fileName, extra, includeSms });
   },
 
   /** Opens Android's file picker and returns the text of the chosen backup file. */

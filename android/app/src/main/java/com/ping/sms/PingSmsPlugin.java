@@ -372,7 +372,13 @@ public class PingSmsPlugin extends Plugin {
 
     // ---------------- Backup & restore (files the user chooses, via Android's file picker) ----------------
 
-    /** Lets the user pick where to save a backup file, then writes the given text into it. */
+    /**
+     * Lets the user pick where to save a backup file, then streams the backup into it.
+     * The phone's SMS are read straight from Android's store into the file one row at a time, so a large
+     * inbox never has to fit in memory (or cross the web bridge) as one huge string.
+     * Options: fileName; extra = JSON members without the outer braces (the app's own data);
+     * includeSms = whether to also write the phone's messages.
+     */
     @PluginMethod
     public void saveBackupFile(PluginCall call) {
         String fileName = call.getString("fileName", "ping-sms-backup.json");
@@ -393,16 +399,69 @@ public class PingSmsPlugin extends Plugin {
             call.resolve(ret);
             return;
         }
-        String content = call.getString("content", "");
-        try (OutputStream out = getContext().getContentResolver().openOutputStream(data.getData(), "wt")) {
-            if (out == null) throw new IOException("Could not open the chosen file");
-            out.write(content.getBytes(StandardCharsets.UTF_8));
-            out.flush();
-            ret.put("saved", true);
-            call.resolve(ret);
-        } catch (Exception e) {
-            call.reject("Could not save the backup: " + e.getMessage());
-        }
+        Context context = getContext();
+        String extra = call.getString("extra", "");
+        boolean includeSms = Boolean.TRUE.equals(call.getBoolean("includeSms", false))
+            && ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+        Uri target = data.getData();
+        // Do the work off the main thread: reading a big inbox on the UI thread can freeze or kill the app.
+        new Thread(() -> {
+            int count = 0;
+            Cursor cursor = null;
+            try (OutputStream out = context.getContentResolver().openOutputStream(target, "wt")) {
+                if (out == null) throw new IOException("Could not open the chosen file");
+                java.io.BufferedWriter w = new java.io.BufferedWriter(new java.io.OutputStreamWriter(out, StandardCharsets.UTF_8), 65536);
+                w.write("{\"app\":\"Ping\",\"version\":3,\"createdAt\":");
+                java.text.SimpleDateFormat iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US);
+                iso.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+                w.write(JSObject.quote(iso.format(new java.util.Date())));
+                w.write(",\"sms\":[");
+                if (includeSms) {
+                    cursor = context.getContentResolver().query(
+                        Uri.parse("content://sms/"),
+                        new String[] { "address", "body", "date", "read", "type" },
+                        null,
+                        null,
+                        "date DESC"
+                    );
+                    if (cursor != null) {
+                        int iAddr = cursor.getColumnIndexOrThrow("address");
+                        int iBody = cursor.getColumnIndexOrThrow("body");
+                        int iDate = cursor.getColumnIndexOrThrow("date");
+                        int iRead = cursor.getColumnIndexOrThrow("read");
+                        int iType = cursor.getColumnIndexOrThrow("type");
+                        while (cursor.moveToNext()) {
+                            String address = cursor.getString(iAddr);
+                            String body = cursor.getString(iBody);
+                            if (count > 0) w.write(',');
+                            w.write("{\"address\":");
+                            w.write(JSObject.quote(address != null ? address : "Unknown"));
+                            w.write(",\"body\":");
+                            w.write(JSObject.quote(body != null ? body : ""));
+                            w.write(",\"date\":" + cursor.getLong(iDate));
+                            w.write(",\"isSent\":" + (cursor.getInt(iType) == 2));
+                            w.write(",\"isRead\":" + (cursor.getInt(iRead) == 1));
+                            w.write('}');
+                            count++;
+                        }
+                    }
+                }
+                w.write(']');
+                if (extra != null && !extra.isEmpty()) {
+                    w.write(',');
+                    w.write(extra);
+                }
+                w.write('}');
+                w.flush();
+                ret.put("saved", true);
+                ret.put("count", count);
+                call.resolve(ret);
+            } catch (Throwable e) { // includes OutOfMemoryError: report it instead of crashing the app
+                call.reject("Could not save the backup: " + e.getMessage());
+            } finally {
+                if (cursor != null) cursor.close();
+            }
+        }, "ping-backup").start();
     }
 
     /** Lets the user pick a backup file and returns its text. */
