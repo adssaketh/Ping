@@ -22,6 +22,7 @@ import {
   FileText,
   Code,
   ChevronRight,
+  Bug,
   Camera,
   Trash2,
 } from 'lucide-react';
@@ -67,6 +68,7 @@ interface SettingsModalProps {
   onClose: () => void;
   onOpenPrivacy?: () => void;
   onOpenCredits?: () => void;
+  onOpenLogs?: () => void;
   /** Re-opens the first-launch setup */
   onOpenSetup?: () => void;
 }
@@ -76,6 +78,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onClose,
   onOpenPrivacy,
   onOpenCredits,
+  onOpenLogs,
   onOpenSetup,
 }) => {
   const isDesktop = useIsDesktop();
@@ -1102,6 +1105,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <p className="text-sm font-semibold text-m3-on-surface dark:text-white">Privacy Policy</p>
                 <p className="text-xs text-m3-outline dark:text-m3-outline-dk mt-0.5">
                   What Ping can access and how your data is handled
+                </p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />
+            </button>
+          )}
+
+          {/* Logs */}
+          {onOpenLogs && (
+            <button
+              type="button"
+              onClick={onOpenLogs}
+              className="w-full flex items-center gap-4 p-4 sm:p-5 rounded-[28px] bg-white dark:bg-m3-d1 border border-m3-line dark:border-m3-d4 shadow-xs text-left hover:bg-m3-surface-hi dark:hover:bg-m3-d2"
+            >
+              <div className="w-11 h-11 rounded-2xl bg-m3-primary-container dark:bg-m3-primary-deep text-m3-primary dark:text-m3-primary-light flex items-center justify-center shrink-0">
+                <Bug className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-m3-on-surface dark:text-white">Logs</p>
+                <p className="text-xs text-m3-outline dark:text-m3-outline-dk mt-0.5">
+                  View, copy or save crash reports and recent activity
                 </p>
               </div>
               <ChevronRight className="w-5 h-5 text-m3-outline dark:text-m3-outline-dk shrink-0" />

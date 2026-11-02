@@ -1,3 +1,4 @@
+import { startAppLog } from './utils/appLog.ts';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
@@ -16,5 +17,7 @@ if ('serviceWorker' in navigator) {
       .catch(() => {});
   }
 }
+
+startAppLog();
 
 createRoot(document.getElementById('root')!).render(<App />);

@@ -9,6 +9,7 @@ import {
   ConversationCategory,
 } from '../types.ts';
 import { applyPalette, SystemPalettes } from '../theme/dynamicColor.ts';
+import { appLog } from '../utils/appLog.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
 import { businessKey, isPhoneNumber, phoneKey } from '../utils/phone.ts';
 import { dedupeContacts } from '../utils/contactSearch.ts';
@@ -1222,9 +1223,12 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (isNativePlatform) {
         // The phone's messages are streamed into the file natively (not loaded into the web layer), so even a
         // very large inbox can't run the app out of memory. We only send the app's own data across the bridge.
+        appLog('backup: start');
         const perms = await smsBridge.checkPermissions();
         const extra = JSON.stringify(appData).slice(1, -1); // JSON members without the outer { }
+        appLog(`backup: readSms=${!!perms.readSms}, app data ${extra.length} chars; opening file picker`);
         const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms);
+        appLog(`backup: native finished, saved=${res.saved}, count=${res.count}`);
         if (!res.saved) return { ok: false, message: 'Backup cancelled' };
         const count = res.count || messagesRef.current.length;
         return { ok: true, message: `Backed up ${count} messages` };
@@ -1246,6 +1250,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       URL.revokeObjectURL(url);
       return { ok: true, message: `Backed up ${messagesRef.current.length} messages` };
     } catch (err) {
+      appLog('backup: FAILED', err);
       return { ok: false, message: `Backup failed: ${err instanceof Error ? err.message : 'unknown error'}` };
     }
   }, [isNativePlatform, contacts]);

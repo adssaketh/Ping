@@ -80,6 +80,143 @@ public class PingSmsPlugin extends Plugin {
     public void load() {
         super.load();
         instance = this;
+        installCrashLogger(getContext().getApplicationContext());
+    }
+
+    // ---------------- Logs (Settings > Logs) ----------------
+
+    private static boolean crashLoggerInstalled = false;
+
+    private static java.io.File crashFile(Context ctx) {
+        return new java.io.File(ctx.getFilesDir(), "ping-crash.log");
+    }
+
+    /** Writes any crash (with its full stack trace) to a file, so it can be read after the app restarts. */
+    private static synchronized void installCrashLogger(final Context ctx) {
+        if (crashLoggerInstalled) return;
+        crashLoggerInstalled = true;
+        final Thread.UncaughtExceptionHandler previous = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler((thread, error) -> {
+            try {
+                java.io.StringWriter sw = new java.io.StringWriter();
+                error.printStackTrace(new java.io.PrintWriter(sw));
+                java.io.File f = crashFile(ctx);
+                if (f.length() > 200000) f.delete();
+                try (java.io.FileWriter fw = new java.io.FileWriter(f, true)) {
+                    fw.write("=== CRASH " + new java.util.Date() + " | thread=" + thread.getName()
+                        + " | " + Build.MANUFACTURER + " " + Build.MODEL + " | Android " + Build.VERSION.RELEASE
+                        + " (API " + Build.VERSION.SDK_INT + ") ===\n" + sw + "\n");
+                }
+            } catch (Throwable ignored) {
+                // nothing more can be done while crashing
+            }
+            if (previous != null) previous.uncaughtException(thread, error);
+        });
+    }
+
+    private static final String[] EXIT_REASONS = {
+        "UNKNOWN", "EXIT_SELF", "SIGNALED", "LOW_MEMORY", "CRASH", "CRASH_NATIVE", "ANR",
+        "INITIALIZATION_FAILURE", "PERMISSION_CHANGE", "EXCESSIVE_RESOURCE_USAGE", "USER_REQUESTED",
+        "USER_STOPPED", "DEPENDENCY_DIED", "OTHER"
+    };
+
+    /** Returns the saved crash reports, why Android says earlier runs ended (API 30+), and this app's recent system log. */
+    @PluginMethod
+    public void getNativeLogs(PluginCall call) {
+        final Context context = getContext();
+        new Thread(() -> {
+            JSObject ret = new JSObject();
+            String crash = "";
+            try {
+                java.io.File f = crashFile(context);
+                if (f.exists()) {
+                    byte[] bytes = new byte[(int) Math.min(f.length(), 200000)];
+                    try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+                        int off = 0, n;
+                        while (off < bytes.length && (n = in.read(bytes, off, bytes.length - off)) > 0) off += n;
+                    }
+                    crash = new String(bytes, StandardCharsets.UTF_8);
+                }
+            } catch (Throwable e) {
+                crash = "(could not read crash file: " + e + ")";
+            }
+            StringBuilder exits = new StringBuilder();
+            try {
+                if (Build.VERSION.SDK_INT >= 30) {
+                    android.app.ActivityManager am = (android.app.ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+                    java.util.List<android.app.ApplicationExitInfo> list = am.getHistoricalProcessExitReasons(null, 0, 8);
+                    for (android.app.ApplicationExitInfo info : list) {
+                        int r = info.getReason();
+                        exits.append(new java.util.Date(info.getTimestamp())).append(" | ")
+                            .append(r >= 0 && r < EXIT_REASONS.length ? EXIT_REASONS[r] : String.valueOf(r))
+                            .append(" | status=").append(info.getStatus())
+                            .append(" | ").append(info.getDescription() == null ? "" : info.getDescription())
+                            .append('\n');
+                    }
+                } else {
+                    exits.append("(needs Android 11 or newer)");
+                }
+            } catch (Throwable e) {
+                exits.append("(could not read: ").append(e).append(")");
+            }
+            StringBuilder logcat = new StringBuilder();
+            try {
+                Process proc = Runtime.getRuntime().exec(new String[] { "logcat", "-d", "-t", "1500" });
+                try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = r.readLine()) != null && logcat.length() < 300000) logcat.append(line).append('\n');
+                }
+            } catch (Throwable e) {
+                logcat.append("(could not read system log: ").append(e).append(")");
+            }
+            ret.put("crash", crash);
+            ret.put("exits", exits.toString());
+            ret.put("logcat", logcat.toString());
+            call.resolve(ret);
+        }, "ping-logs").start();
+    }
+
+    @PluginMethod
+    public void clearNativeLogs(PluginCall call) {
+        try {
+            crashFile(getContext()).delete();
+        } catch (Throwable ignored) {
+            // nothing to clear
+        }
+        call.resolve();
+    }
+
+    /** Lets the user pick where to save a small text file (the log), then writes the given text into it. */
+    @PluginMethod
+    public void saveTextFile(PluginCall call) {
+        String fileName = call.getString("fileName", "ping-log.txt");
+        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("text/plain");
+        intent.putExtra(Intent.EXTRA_TITLE, fileName);
+        startActivityForResult(call, intent, "saveTextResult");
+    }
+
+    @ActivityCallback
+    private void saveTextResult(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Intent data = result.getData();
+        JSObject ret = new JSObject();
+        if (result.getResultCode() != Activity.RESULT_OK || data == null || data.getData() == null) {
+            ret.put("saved", false);
+            call.resolve(ret);
+            return;
+        }
+        String content = call.getString("content", "");
+        try (OutputStream out = getContext().getContentResolver().openOutputStream(data.getData(), "wt")) {
+            if (out == null) throw new IOException("Could not open the chosen file");
+            out.write(content.getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            ret.put("saved", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Could not save the log: " + e.getMessage());
+        }
     }
 
     public static void notifyIncomingSms(String sender, String body, long timestamp, int subscriptionId) {

@@ -30,6 +30,7 @@ const SettingsModal = lazyScreen(() => import('./components/SettingsModal.tsx').
 const PrivacyPolicyModal = lazyScreen(() =>
   import('./components/PrivacyPolicyModal.tsx').then((m) => ({ default: m.PrivacyPolicyModal }))
 );
+const LogsModal = lazyScreen(() => import('./components/LogsModal.tsx').then((m) => ({ default: m.LogsModal })));
 const CreditsModal = lazyScreen(() => import('./components/CreditsModal.tsx').then((m) => ({ default: m.CreditsModal })));
 const ProfilePhotoEditor = lazyScreen(() =>
   import('./components/ProfilePhotoEditor.tsx').then((m) => ({ default: m.ProfilePhotoEditor }))
@@ -85,6 +86,7 @@ const AppContent: React.FC = () => {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [creditsOpen, setCreditsOpen] = useState(false);
+  const [logsOpen, setLogsOpen] = useState(false);
   // First-launch setup: opens by itself once (Android app only) and again from Settings
   const [setupOpen, setSetupOpen] = useState(() => isNativeAndroid() && !isSetupDone());
   const isDesktop = useIsDesktop();
@@ -107,6 +109,7 @@ const AppContent: React.FC = () => {
   const openSettings = useCallback(() => startTransition(() => setSettingsOpen(true)), []);
   const openPrivacy = useCallback(() => setPrivacyOpen(true), []);
   const openCredits = useCallback(() => setCreditsOpen(true), []);
+  const openLogs = useCallback(() => setLogsOpen(true), []);
   const leaveChat = useCallback(() => selectConversation(null), [selectConversation]);
 
   // Android back button: close the top-most thing first (menu / dialog / chat / tab / search)
@@ -114,6 +117,7 @@ const AppContent: React.FC = () => {
   useBackHandler(settingsOpen, useCallback(() => setSettingsOpen(false), []));
   useBackHandler(privacyOpen, useCallback(() => setPrivacyOpen(false), []));
   useBackHandler(creditsOpen, useCallback(() => setCreditsOpen(false), []));
+  useBackHandler(logsOpen, useCallback(() => setLogsOpen(false), []));
   useBackHandler(!!activeConversationId, leaveChat);
   useBackHandler(filter !== 'all', useCallback(() => setFilter('all'), [setFilter]));
   useBackHandler(searchQuery.trim() !== '', useCallback(() => setSearchQuery(''), [setSearchQuery]));
@@ -126,6 +130,7 @@ const AppContent: React.FC = () => {
       import('./components/ProfilePhotoEditor.tsx');
       import('./components/PrivacyPolicyModal.tsx');
       import('./components/CreditsModal.tsx');
+      import('./components/LogsModal.tsx');
     }, 1200);
     return () => window.clearTimeout(timer);
   }, []);
@@ -217,6 +222,7 @@ const AppContent: React.FC = () => {
         onClose={() => setSettingsOpen(false)}
         onOpenPrivacy={openPrivacy}
         onOpenCredits={openCredits}
+        onOpenLogs={openLogs}
         onOpenSetup={() => {
           setSettingsOpen(false);
           setSetupOpen(true);
@@ -225,6 +231,7 @@ const AppContent: React.FC = () => {
 
       <PrivacyPolicyModal isOpen={privacyOpen} onClose={() => setPrivacyOpen(false)} />
       <CreditsModal isOpen={creditsOpen} onClose={() => setCreditsOpen(false)} />
+      <LogsModal isOpen={logsOpen} onClose={() => setLogsOpen(false)} />
       <ProfilePhotoEditor />
 
       <OnboardingFlow open={setupOpen} onFinish={() => setSetupOpen(false)} />

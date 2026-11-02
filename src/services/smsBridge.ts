@@ -82,6 +82,9 @@ interface PingSmsPluginInterface {
   exitApp(): Promise<void>;
   saveBackupFile(options: { fileName: string; extra: string; includeSms: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
+  getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }>;
+  clearNativeLogs(): Promise<void>;
+  saveTextFile(options: { fileName: string; content: string }): Promise<{ saved: boolean }>;
   restoreSms(options: { messages: BackupSms[] }): Promise<{ inserted: number; skipped: number }>;
   setSpamConfig(options: { enabled: boolean; threshold: number; allow: string[]; block: string[]; learned: Record<string, number> }): Promise<void>;
   sendSms(options: {
@@ -282,6 +285,22 @@ export const smsBridge = {
    */
   async saveBackupFile(fileName: string, extra: string, includeSms: boolean): Promise<{ saved: boolean; count?: number }> {
     return PingSms.saveBackupFile({ fileName, extra, includeSms });
+  },
+
+  /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */
+  async getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }> {
+    if (!isNativeAndroid()) return { crash: '', exits: '', logcat: '' };
+    return PingSms.getNativeLogs();
+  },
+
+  async clearNativeLogs(): Promise<void> {
+    if (!isNativeAndroid()) return;
+    await PingSms.clearNativeLogs();
+  },
+
+  /** Opens Android's "save as" picker and writes a small text file (used for the log). */
+  async saveTextFile(fileName: string, content: string): Promise<{ saved: boolean }> {
+    return PingSms.saveTextFile({ fileName, content });
   },
 
   /** Opens Android's file picker and returns the text of the chosen backup file. */
