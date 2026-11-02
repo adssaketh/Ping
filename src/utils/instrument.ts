@@ -176,7 +176,7 @@ export function indexInstruments(msgs: Array<{ id: string; text: string }>, send
 }
 
 /**
- * Your own names for the accounts, cards and wallets detected above. Keys are instrumentKey() values.
+ * Your own names for the accounts, cards and schemes detected above. Keys are instrumentKey() values.
  * The same list lives in Paddhu Pusthakam (lib/struct/knownAccounts.dart): change both together.
  */
 export interface KnownAccount {
@@ -185,39 +185,58 @@ export interface KnownAccount {
 }
 
 const KNOWN_ACCOUNTS: Record<string, KnownAccount> = {
-  'sbi:account:6919': { name: 'Mansa - SBI Savings Account', closed: false },
-  'axis:account:6372': { name: 'Saketh - Axis Savings Account', closed: false },
+  'axis:account:6372': { name: 'Saketh - Axis Savings Bank Account', closed: false },
+  'sbi:account:1327': { name: 'Saketh - SBI Savings Bank Account', closed: false },
+  'axis:credit_card:4498': { name: 'Saketh - Axis Bank Privilege Credit Card', closed: false },
+  'icici:credit_card:1000': { name: 'Saketh - ICICI Amazon Pay Credit Card', closed: false },
+  'sbi_card:credit_card:3764': { name: 'Saketh - SBI IRCTC Platinum Credit Card', closed: false },
+  'yes:credit_card:3689': { name: 'Saketh - Kiwi Yes Bank Credit Card', closed: false },
+  'yes:credit_card:': { name: 'Saketh - Kiwi Yes Bank Credit Card', closed: false },
+  'hdfc:credit_card:0886': { name: 'Saketh - HDFC Indian Oil Credit Card', closed: false },
+  'federal:credit_card:1736': { name: 'Saketh - Federal Bank Scapia Visa Credit Card', closed: false },
+  'federal:credit_card:4278': { name: 'Saketh - Federal Bank Scapia Rupay Credit Card (add-on)', closed: false },
+  'bajaj:credit_card:0688': { name: 'Saketh - Bajaj Finserv EMI Card', closed: false },
+  'kfncra:account:0840': { name: 'Saketh - National Pension Scheme (NPS) Tier 1', closed: false },
+  'ptnnps:account:7819': { name: 'Saketh - Atal Pension Yojana (APY)', closed: false },
+  'epfoho:account:4895': { name: 'Saketh - Employee Provident Fund (EPF)', closed: false },
+  'sbi:account:6919': { name: 'Mansa - SBI Savings Bank Account', closed: false },
+  'federal:account:7855': { name: 'Mansa - Federal Bank (Jupiter) Savings Account', closed: false },
+  'dopbnk:account:7718': { name: 'Mansa - India Post Payments Bank Savings Account (APY)', closed: false },
+  'ipbmsg:account:7716': { name: 'Mansa - India Post Payments Bank Digital Savings Account (PLI)', closed: false },
+  'icici:credit_card:5002': { name: 'Mansa - ICICI Coral Rupay Credit Card', closed: false },
+  'federal:credit_card:3777': { name: 'Mansa - Federal Bank Scapia Rupay Credit Card (add-on)', closed: false },
+  'ptnnps:account:0727': { name: 'Mansa - Atal Pension Yojana (APY)', closed: false },
+  'epfoho:account:4774': { name: 'Mansa - Employee Provident Fund (EPF)', closed: false },
   'icici:account:2090': { name: 'Saketh - ICICI Savings Account', closed: true },
   'au:account:1858': { name: 'Saketh - AU Small Finance Bank Savings Account', closed: true },
   'au:account:7280': { name: 'FD Account', closed: true },
-  'adipbmsg:account:7716': { name: 'Mansa - Post Office Digital Account (PLI)', closed: false },
-  'addopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
-  'btdopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
-  'axdopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
-  'dopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
   'federal:account:3269': { name: 'Federal Bank Account', closed: true },
   'federal:account:4365': { name: 'Federal Bank Account', closed: true },
   'federal:account:6299': { name: 'Federal Bank Account', closed: true },
-  'federal:unknown:': { name: 'Federal Bank Account', closed: true },
-  'icici:credit_card:1000': { name: 'ICICI Amazon Pay Credit Card', closed: false },
   'icici:credit_card:8006': { name: 'ICICI Coral Rupay Credit Card', closed: true },
   'federal:credit_card:9368': { name: 'Federal Signet Rupay Card', closed: true },
-  'federal:credit_card:': { name: 'Federal Signet Rupay Card', closed: true },
-  'yes:credit_card:3689': { name: 'Kiwi Yes Bank Credit Card', closed: false },
-  'yes:credit_card:': { name: 'Kiwi Yes Bank Credit Card', closed: false },
   'hdfc:credit_card:1170': { name: 'HDFC Swiggy Credit Card', closed: true },
-  'hdfc:credit_card:0886': { name: 'HDFC Indian Oil Credit Card', closed: false },
   'axis:credit_card:1896': { name: 'Axis Indian Oil Credit Card', closed: true },
   'axis:credit_card:2099': { name: 'Axis Myzone Credit Card', closed: true },
   'idfcfb:credit_card:0932': { name: 'IDFC First Bank Millennia Credit Card', closed: true },
   'sbi_card:credit_card:3367': { name: 'SBI Credit Card', closed: true },
   'sbi_card:credit_card:6511': { name: 'SBI Credit Card', closed: true },
   'sbi_card:credit_card:3054': { name: 'SBI Credit Card', closed: true },
-  'sbi_card:credit_card:3764': { name: 'SBI IRCTC Platinum Credit Card', closed: false },
   'sbi:debit_card:3811': { name: 'Mansa - SBI Debit Card', closed: true },
   'sbi:debit_card:2617': { name: 'Mansa - SBI Debit Card', closed: false },
 };
 
+/** Exact key first, then same ending digits with the same issuer (a longer sender name such as
+ *  "cpptnnps" counts as the registered "ptnnps"). */
 export function knownAccount(key: string): KnownAccount | null {
-  return KNOWN_ACCOUNTS[key] ?? null;
+  const exact = KNOWN_ACCOUNTS[key];
+  if (exact) return exact;
+  const p = key.split(':');
+  if (p.length !== 3 || p[2].length < 3) return null;
+  for (const [k, v] of Object.entries(KNOWN_ACCOUNTS)) {
+    const q = k.split(':');
+    if (q.length !== 3 || q[2] === '' || !q[2].endsWith(p[2])) continue;
+    if (q[0] === p[0] || (q[0].length >= 5 && p[0].includes(q[0]))) return v;
+  }
+  return null;
 }
