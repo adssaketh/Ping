@@ -22,6 +22,7 @@ const ISSUER_BY_SENDER: Array<[RegExp, string]> = [
   [/^AXIS/, 'axis'],
   [/^(FEDBNK|FEDERL|FEDRAL)$/, 'federal'],
   [/^HDFC/, 'hdfc'],
+  [/^IDFCFB/, 'idfcfb'],
   [/^AUBANK$/, 'au'],
   [/^YESBNK$/, 'yes'],
   [/^(JIOPAY|JIOINF|JIOFIN)$/, 'jiopay'],
@@ -70,6 +71,11 @@ const tail = (digits: string) => (digits.length > 4 ? digits.slice(-4) : digits)
 export function parseInstrument(sender: string, body: string): InstrumentRef {
   const issuer = issuerOf(sender, body);
   const text = body || '';
+
+  // Scapia (Federal Bank) SMS never print the card digits, the card network is the only clue
+  if (/^FEDSCP/.test(senderName(sender)) || /\bscapia\b/i.test(text)) {
+    return { issuer: 'scapia', kind: 'credit_card', last: /\bvisa\b/i.test(text) ? 'visa' : /\brupay\b/i.test(text) ? 'rupay' : '' };
+  }
 
   const isCredit = /credit\s*card|\bcc\b\s*(?:no|ending|xx|x+|\*+|\d)|sbi card/i.test(text) || issuer === 'sbi_card';
   const isDebit = /debit\s*card/i.test(text);
@@ -140,7 +146,7 @@ export function buildInstrumentResolver(refs: InstrumentRef[]) {
 
 const ISSUER_LABEL: Record<string, string> = {
   sbi: 'SBI', sbi_card: 'SBI Card', icici: 'ICICI', axis: 'Axis', federal: 'Federal', hdfc: 'HDFC', au: 'AU',
-  yes: 'Yes Bank', idfc: 'IDFC First', idfcfb: 'IDFC First', jiopay: 'Jio Pay', zepto: 'Zepto', zepto_cash: 'Zepto Cash',
+  yes: 'Yes Bank', idfc: 'IDFC First', idfcfb: 'IDFC First', scapia: 'Scapia', jiopay: 'Jio Pay', zepto: 'Zepto', zepto_cash: 'Zepto Cash',
   phonepe: 'PhonePe', phonepe_wallet: 'PhonePe wallet', mi_pay: 'Mi Pay', amazon_pay_balance: 'Amazon Pay', paytm: 'Paytm',
 };
 
@@ -193,6 +199,9 @@ const KNOWN_ACCOUNTS: Record<string, KnownAccount> = {
   'yes:credit_card:3689': { name: 'Saketh - Kiwi Yes Bank Credit Card', closed: false },
   'yes:credit_card:': { name: 'Saketh - Kiwi Yes Bank Credit Card', closed: false },
   'hdfc:credit_card:0886': { name: 'Saketh - HDFC Indian Oil Credit Card', closed: false },
+  'scapia:credit_card:visa': { name: 'Saketh - Federal Bank Scapia Visa Credit Card', closed: false },
+  'scapia:credit_card:rupay': { name: 'Federal Bank Scapia Rupay Credit Card (Saketh add-on or Mansa add-on)', closed: false },
+  'scapia:credit_card:': { name: 'Federal Bank Scapia Credit Card (Saketh Visa or Rupay, or Mansa add-on)', closed: false },
   'federal:credit_card:1736': { name: 'Saketh - Federal Bank Scapia Visa Credit Card', closed: false },
   'federal:credit_card:4278': { name: 'Saketh - Federal Bank Scapia Rupay Credit Card (add-on)', closed: false },
   'bajaj:credit_card:0688': { name: 'Saketh - Bajaj Finserv EMI Card', closed: false },

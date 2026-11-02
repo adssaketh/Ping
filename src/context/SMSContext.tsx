@@ -23,7 +23,7 @@ import {
   SPAM_THRESHOLDS,
   SpamScore,
 } from '../spam/classifier.ts';
-import { soundFx, getAvatarColorClasses, extractOtpCode, getInitials, categorizeSms } from '../utils/smsUtils.ts';
+import { soundFx, getAvatarColorClasses, extractOtpCode, getInitials, categorizeSms, categorizeThread } from '../utils/smsUtils.ts';
 import {
   smsBridge,
   isNativeAndroid,
@@ -1586,7 +1586,13 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const matchedName = (cleanDigits && contactNameMap.get(cleanDigits)) || rawAddress;
 
         const convId = `conv-dev-${key}`;
-        const category = categorizeSms(rawAddress, lastMsg.body, contactNameMap.has(cleanDigits));
+        // judged by everything received in the thread, not only the last message
+        const category = categorizeThread(
+          rawAddress,
+          lastMsg.body,
+          groupMsgs.filter((m) => !m.isSent).map((m) => m.body),
+          contactNameMap.has(cleanDigits)
+        );
 
         let unread = 0;
         groupMsgs.forEach((m) => {

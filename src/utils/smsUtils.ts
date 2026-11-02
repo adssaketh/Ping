@@ -334,3 +334,64 @@ export function categorizeSms(
   return /[a-z]/i.test(sender) ? 'services' : 'personal';
 }
 
+
+// ---------------------------------------------------------------------------------------------
+// Thread-level categorization
+// ---------------------------------------------------------------------------------------------
+
+// A real, completed money movement: an amount plus debited / credited / spent / received ...
+// Reminders, requests, OTPs and "will be debited" notices do not count. Same rules as the
+// parser in Paddhu Pusthakam (smsTransactionParser.dart).
+const NOT_TXN_RE =
+  /requested money|will be debited|is due|due on|not completed|if debited|passbook|has been initiated|e-mandate|mandate|\botp\b|one.?time password|verification code|balance enquiry|statement|total amt due|min amt due/i;
+const TXN_AMOUNT_RE = /(?:rs\.?|inr|\u20b9)\s*\d|(?:debited|credited)\s+(?:by|for|with)\s+\d/i;
+const TXN_MOVED_RE =
+  /\bdebit(?:ed)?\b(?! card)|credited|spent|\bpaid\b|withdrawn|\bsent\b|purchase|payment of|\btxn of\b|transaction number \d+ for|received|refund|deposited/i;
+const CARD_BILL_RE =
+  /payment of .{0,24}(?:has been|is) received (?:on|towards) your .{0,60}credit card|credit ?card payment|payment .{0,30}towards your .{0,40}credit card|thank you for payment .{0,40}credit card/i;
+const OTP_LIKE_RE = /\botp\b|one.?time password|verification code|pass\s?code|\bcode\b/i;
+
+export function isTransactionSms(body: string): boolean {
+  if (!body) return false;
+  if (CARD_BILL_RE.test(body)) return true;
+  if (NOT_TXN_RE.test(body)) return false;
+  return TXN_AMOUNT_RE.test(body) && TXN_MOVED_RE.test(body);
+}
+
+/**
+ * Category of a whole conversation, judged by what is in it and not only by the last message.
+ *
+ * Banks send debits and credits under service headers (AX-AXISBK-S, AD-ICICIT-S, JD-SBICRD-S ...),
+ * so the sender letter and the last message alone put most of them in Services. Here:
+ *  - a thread where at least 2 messages, and at least 20% of them, are real transactions is
+ *    Transactions (a "-P" promotional header still wins);
+ *  - a thread that Transactions would take only because of the last message, but that has no real
+ *    transaction, no OTP and no "-T" header, goes to Services instead;
+ *  - everything else is decided as before by categorizeSms.
+ *
+ * `bodies` are the messages you received in the thread.
+ */
+export function categorizeThread(
+  address: string,
+  lastBody: string,
+  bodies: string[],
+  isContact = false
+): 'personal' | 'transactions' | 'services' | 'promotions' {
+  const base = categorizeSms(address, lastBody, isContact);
+  if (isContact || base === 'personal' || bodies.length === 0) return base;
+
+  const header = /^[a-z0-9]{2}-[a-z0-9]{2,12}-([a-z])$/i.exec((address || '').trim());
+  const letter = header ? header[1].toUpperCase() : '';
+  if (letter === 'P') return base;
+
+  let txn = 0;
+  let otp = false;
+  for (const b of bodies) {
+    if (isTransactionSms(b)) txn++;
+    else if (!otp && OTP_LIKE_RE.test(b)) otp = true;
+  }
+
+  if (txn >= 2 && txn / bodies.length >= 0.2) return 'transactions';
+  if (base === 'transactions' && txn === 0 && bodies.length >= 3 && letter !== 'T' && !otp) return 'services';
+  return base;
+}
