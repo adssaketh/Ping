@@ -13,7 +13,7 @@ import { appLog } from '../utils/appLog.ts';
 import type { BackupSms } from '../services/smsBridge.ts';
 import { businessKey, isPhoneNumber, phoneKey } from '../utils/phone.ts';
 import { dedupeContacts } from '../utils/contactSearch.ts';
-import { indexInstruments, instrumentLabel, isClosedInstrument } from '../utils/instrument.ts';
+import { indexInstruments, instrumentLabel, isClosedInstrument, knownAccount } from '../utils/instrument.ts';
 import {
   loadSpamModel,
   scoreSms,
@@ -1900,8 +1900,10 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const instrumentOfMessage = useCallback(
     (messageId: string) => {
       const key = instrumentIndex.get(messageId);
-      const label = key ? instrumentLabel(key) : null;
-      return key && label ? { key, label, closed: isClosedInstrument(key) } : null;
+      if (!key) return null;
+      const known = knownAccount(key);
+      const label = known ? known.name : instrumentLabel(key);
+      return label ? { key, label, closed: known ? known.closed : isClosedInstrument(key) } : null;
     },
     [instrumentIndex]
   );

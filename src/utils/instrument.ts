@@ -174,3 +174,50 @@ export function indexInstruments(msgs: Array<{ id: string; text: string }>, send
   for (const x of parsed) out.set(x.id, resolve(x.ref));
   return out;
 }
+
+/**
+ * Your own names for the accounts, cards and wallets detected above. Keys are instrumentKey() values.
+ * The same list lives in Paddhu Pusthakam (lib/struct/knownAccounts.dart): change both together.
+ */
+export interface KnownAccount {
+  name: string;
+  closed: boolean;
+}
+
+const KNOWN_ACCOUNTS: Record<string, KnownAccount> = {
+  'sbi:account:6919': { name: 'Mansa - SBI Savings Account', closed: false },
+  'axis:account:6372': { name: 'Saketh - Axis Savings Account', closed: false },
+  'icici:account:2090': { name: 'Saketh - ICICI Savings Account', closed: true },
+  'au:account:1858': { name: 'Saketh - AU Small Finance Bank Savings Account', closed: true },
+  'au:account:7280': { name: 'FD Account', closed: true },
+  'adipbmsg:account:7716': { name: 'Mansa - Post Office Digital Account (PLI)', closed: false },
+  'addopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
+  'btdopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
+  'axdopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
+  'dopbnk:account:7718': { name: 'Mansa - Post Office Savings Account (APY)', closed: false },
+  'federal:account:3269': { name: 'Federal Bank Account', closed: true },
+  'federal:account:4365': { name: 'Federal Bank Account', closed: true },
+  'federal:account:6299': { name: 'Federal Bank Account', closed: true },
+  'federal:unknown:': { name: 'Federal Bank Account', closed: true },
+  'icici:credit_card:1000': { name: 'ICICI Amazon Pay Credit Card', closed: false },
+  'icici:credit_card:8006': { name: 'ICICI Coral Rupay Credit Card', closed: true },
+  'federal:credit_card:9368': { name: 'Federal Signet Rupay Card', closed: true },
+  'federal:credit_card:': { name: 'Federal Signet Rupay Card', closed: true },
+  'yes:credit_card:3689': { name: 'Kiwi Yes Bank Credit Card', closed: false },
+  'yes:credit_card:': { name: 'Kiwi Yes Bank Credit Card', closed: false },
+  'hdfc:credit_card:1170': { name: 'HDFC Swiggy Credit Card', closed: true },
+  'hdfc:credit_card:0886': { name: 'HDFC Indian Oil Credit Card', closed: false },
+  'axis:credit_card:1896': { name: 'Axis Indian Oil Credit Card', closed: true },
+  'axis:credit_card:2099': { name: 'Axis Myzone Credit Card', closed: true },
+  'idfcfb:credit_card:0932': { name: 'IDFC First Bank Millennia Credit Card', closed: true },
+  'sbi_card:credit_card:3367': { name: 'SBI Credit Card', closed: true },
+  'sbi_card:credit_card:6511': { name: 'SBI Credit Card', closed: true },
+  'sbi_card:credit_card:3054': { name: 'SBI Credit Card', closed: true },
+  'sbi_card:credit_card:3764': { name: 'SBI IRCTC Platinum Credit Card', closed: false },
+  'sbi:debit_card:3811': { name: 'Mansa - SBI Debit Card', closed: true },
+  'sbi:debit_card:2617': { name: 'Mansa - SBI Debit Card', closed: false },
+};
+
+export function knownAccount(key: string): KnownAccount | null {
+  return KNOWN_ACCOUNTS[key] ?? null;
+}
