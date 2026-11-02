@@ -509,12 +509,55 @@ public class PingSmsPlugin extends Plugin {
 
     // ---------------- Backup & restore (files the user chooses, via Android's file picker) ----------------
 
+    private static java.io.File backupStagingFile(Context ctx) {
+        return new java.io.File(ctx.getCacheDir(), "ping-backup-staging.json");
+    }
+
+    /** Sender keys (one per line) of the section being backed up; see addressKey(). */
+    private static java.io.File backupFilterFile(Context ctx) {
+        return new java.io.File(ctx.getCacheDir(), "ping-backup-filter.txt");
+    }
+
+    /** Same idea as phoneKey()/sender matching in the web app: numbers by their last 10 digits, sender IDs by name. */
+    private static String addressKey(String address) {
+        String t = address == null ? "Unknown" : address.trim();
+        if (t.matches("^\\+?[\\d\\s\\-()]{7,}$")) {
+            String d = t.replaceAll("\\D", "");
+            if (d.length() >= 10) d = d.substring(d.length() - 10);
+            return "p:" + d;
+        }
+        return "s:" + t.toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * Receives the app's own backup data in small pieces and keeps it in a temporary file.
+     * It is sent this way (not inside saveBackupFile) because Android saves the options of a call that opens a
+     * picker into the activity's saved state, and a few MB there is too large and crashes the app when it is
+     * sent to the background while the picker is open.
+     */
+    @PluginMethod
+    public void stageBackupData(PluginCall call) {
+        String chunk = call.getString("chunk", "");
+        boolean reset = Boolean.TRUE.equals(call.getBoolean("reset", false));
+        boolean forFilter = "filter".equals(call.getString("target", ""));
+        java.io.File target = forFilter ? backupFilterFile(getContext()) : backupStagingFile(getContext());
+        try (java.io.OutputStreamWriter w = new java.io.OutputStreamWriter(
+                new java.io.FileOutputStream(target, !reset), StandardCharsets.UTF_8)) {
+            w.write(chunk);
+        } catch (Throwable e) {
+            call.reject("Could not prepare the backup: " + e.getMessage());
+            return;
+        }
+        call.resolve();
+    }
+
     /**
      * Lets the user pick where to save a backup file, then streams the backup into it.
      * The phone's SMS are read straight from Android's store into the file one row at a time, so a large
      * inbox never has to fit in memory (or cross the web bridge) as one huge string.
-     * Options: fileName; extra = JSON members without the outer braces (the app's own data);
-     * includeSms = whether to also write the phone's messages.
+     * Options (kept small on purpose, see stageBackupData): fileName; includeSms = also write the phone's messages;
+     * filtered = only the senders listed in the staged filter file (a single section).
+     * The app's own data (JSON members without the outer braces) comes from the staged temporary file.
      */
     @PluginMethod
     public void saveBackupFile(PluginCall call) {
@@ -532,14 +575,16 @@ public class PingSmsPlugin extends Plugin {
         Intent data = result.getData();
         JSObject ret = new JSObject();
         if (result.getResultCode() != Activity.RESULT_OK || data == null || data.getData() == null) {
+            backupStagingFile(getContext()).delete();
+            backupFilterFile(getContext()).delete();
             ret.put("saved", false);
             call.resolve(ret);
             return;
         }
         Context context = getContext();
-        String extra = call.getString("extra", "");
         boolean includeSms = Boolean.TRUE.equals(call.getBoolean("includeSms", false))
             && ContextCompat.checkSelfPermission(context, Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED;
+        final boolean filtered = Boolean.TRUE.equals(call.getBoolean("filtered", false));
         Uri target = data.getData();
         // Do the work off the main thread: reading a big inbox on the UI thread can freeze or kill the app.
         new Thread(() -> {
@@ -554,6 +599,17 @@ public class PingSmsPlugin extends Plugin {
                 w.write(JSObject.quote(iso.format(new java.util.Date())));
                 w.write(",\"sms\":[");
                 if (includeSms) {
+                    Set<String> allowed = null;
+                    if (filtered) {
+                        allowed = new HashSet<>();
+                        java.io.File ff = backupFilterFile(context);
+                        if (ff.exists()) {
+                            try (java.io.BufferedReader fr = new java.io.BufferedReader(new java.io.InputStreamReader(new java.io.FileInputStream(ff), StandardCharsets.UTF_8))) {
+                                String line;
+                                while ((line = fr.readLine()) != null) if (!line.isEmpty()) allowed.add(line);
+                            }
+                        }
+                    }
                     cursor = context.getContentResolver().query(
                         Uri.parse("content://sms/"),
                         new String[] { "address", "body", "date", "read", "type" },
@@ -569,6 +625,7 @@ public class PingSmsPlugin extends Plugin {
                         int iType = cursor.getColumnIndexOrThrow("type");
                         while (cursor.moveToNext()) {
                             String address = cursor.getString(iAddr);
+                            if (allowed != null && !allowed.contains(addressKey(address))) continue;
                             String body = cursor.getString(iBody);
                             if (count > 0) w.write(',');
                             w.write("{\"address\":");
@@ -584,9 +641,14 @@ public class PingSmsPlugin extends Plugin {
                     }
                 }
                 w.write(']');
-                if (extra != null && !extra.isEmpty()) {
+                java.io.File staged = backupStagingFile(context);
+                if (staged.exists() && staged.length() > 0) {
                     w.write(',');
-                    w.write(extra);
+                    try (java.io.Reader r = new java.io.InputStreamReader(new java.io.FileInputStream(staged), StandardCharsets.UTF_8)) {
+                        char[] buf = new char[32768];
+                        int n;
+                        while ((n = r.read(buf)) != -1) w.write(buf, 0, n);
+                    }
                 }
                 w.write('}');
                 w.flush();
@@ -597,6 +659,8 @@ public class PingSmsPlugin extends Plugin {
                 call.reject("Could not save the backup: " + e.getMessage());
             } finally {
                 if (cursor != null) cursor.close();
+                backupStagingFile(context).delete();
+                backupFilterFile(context).delete();
             }
         }, "ping-backup").start();
     }

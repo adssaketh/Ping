@@ -80,7 +80,8 @@ interface PingSmsPluginInterface {
   readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
   showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
-  saveBackupFile(options: { fileName: string; extra: string; includeSms: boolean }): Promise<{ saved: boolean; count?: number }>;
+  stageBackupData(options: { chunk: string; reset?: boolean; target?: 'filter' }): Promise<void>;
+  saveBackupFile(options: { fileName: string; includeSms: boolean; filtered?: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }>;
   clearNativeLogs(): Promise<void>;
@@ -281,10 +282,31 @@ export const smsBridge = {
 
   /**
    * Opens Android's "save as" picker, then writes the backup. The phone's SMS are streamed into the file
-   * natively; `extra` holds the app's own data as JSON members (no outer braces).
+   * natively; `extra` holds the app's own data as JSON members (no outer braces). It is handed over in small
+   * pieces first: the call that opens the picker must stay tiny, because Android stores its options in the
+   * saved state and a large one crashes the app (TransactionTooLargeException).
    */
-  async saveBackupFile(fileName: string, extra: string, includeSms: boolean): Promise<{ saved: boolean; count?: number }> {
-    return PingSms.saveBackupFile({ fileName, extra, includeSms });
+  async saveBackupFile(
+    fileName: string,
+    extra: string,
+    includeSms: boolean,
+    /** Only back up phone messages from these sender keys (one section); omit for everything. */
+    senderKeys?: string[]
+  ): Promise<{ saved: boolean; count?: number }> {
+    const CHUNK = 400_000;
+    await PingSms.stageBackupData({ chunk: '', reset: true });
+    await PingSms.stageBackupData({ chunk: senderKeys ? senderKeys.join('\n') : '', reset: true, target: 'filter' });
+    let i = 0;
+    while (i < extra.length) {
+      let end = Math.min(i + CHUNK, extra.length);
+      if (end < extra.length) {
+        const c = extra.charCodeAt(end - 1);
+        if (c >= 0xd800 && c <= 0xdbff) end--; // do not split a surrogate pair between pieces
+      }
+      await PingSms.stageBackupData({ chunk: extra.slice(i, end) });
+      i = end;
+    }
+    return PingSms.saveBackupFile({ fileName, includeSms, filtered: !!senderKeys });
   },
 
   /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */

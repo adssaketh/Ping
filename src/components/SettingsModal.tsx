@@ -26,6 +26,7 @@ import {
   Camera,
   Trash2,
 } from 'lucide-react';
+import type { ConversationCategory } from '../types.ts';
 import { useSMS } from '../context/SMSContext.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
@@ -155,6 +156,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setBackupBusy(true);
     showToast('Preparing your backup...');
     const result = await backupSmsToFile();
+    setBackupBusy(false);
+    showToast(result.message);
+  };
+
+  const BACKUP_SECTIONS: { id: ConversationCategory; label: string }[] = [
+    { id: 'personal', label: 'Personal' },
+    { id: 'transactions', label: 'Transactions' },
+    { id: 'services', label: 'Services' },
+    { id: 'promotions', label: 'Promotions' },
+  ];
+
+  const handleBackupSection = async (section: ConversationCategory) => {
+    setBackupBusy(true);
+    showToast('Preparing your backup...');
+    const result = await backupSmsToFile(section);
     setBackupBusy(false);
     showToast(result.message);
   };
@@ -1082,6 +1098,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 onChange={handleFileImport}
                 className="hidden"
               />
+            </div>
+
+            <div className="pt-3">
+              <p className="text-xs font-semibold text-m3-on-surface dark:text-white">Back up one section</p>
+              <p className="text-[11px] text-m3-outline dark:text-m3-outline-dk mt-0.5">
+                Save only that section&rsquo;s conversations and messages. Restoring it adds them back without touching
+                your other sections.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {BACKUP_SECTIONS.map((sec) => {
+                  const n = conversations.filter((c) => c.category === sec.id).length;
+                  return (
+                    <button
+                      key={sec.id}
+                      type="button"
+                      onClick={() => handleBackupSection(sec.id)}
+                      disabled={backupBusy || n === 0}
+                      className="flex items-center gap-1.5 px-3.5 py-2 bg-m3-surface-hi dark:bg-m3-d3 hover:bg-m3-primary-container dark:hover:bg-m3-primary-deep text-xs font-semibold text-m3-primary dark:text-m3-primary-light rounded-full transition-colors disabled:opacity-50"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>
+                        {sec.label} ({n})
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 

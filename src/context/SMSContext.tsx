@@ -165,7 +165,8 @@ interface SMSContextType {
   markAsRead: (conversationId: string) => void;
   markAsUnread: (conversationId: string) => void;
   startNewConversation: (contactOrNumber: { name?: string; phoneNumber: string; category?: ConversationCategory }) => string;
-  backupSmsToFile: () => Promise<{ ok: boolean; message: string }>;
+  /** Back up everything, or only one section (Personal, Transactions, Services or Promotions). */
+  backupSmsToFile: (section?: ConversationCategory) => Promise<{ ok: boolean; message: string }>;
   restoreSmsFromJson: (jsonData: string) => Promise<{ ok: boolean; message: string }>;
   pickAndRestoreSms: () => Promise<{ ok: boolean; message: string }>;
   cleanExpiredOtps: () => number;
@@ -1215,45 +1216,69 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ---------------------------------------------------------------
   // Backup & restore (to a file the user chooses)
   // ---------------------------------------------------------------
-  const backupSmsToFile = useCallback(async (): Promise<{ ok: boolean; message: string }> => {
-    try {
-      const fileName = `ping-sms-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      const appData = { conversations: conversationsRef.current, messages: messagesRef.current, contacts };
+  const backupSmsToFile = useCallback(
+    async (section?: ConversationCategory): Promise<{ ok: boolean; message: string }> => {
+      try {
+        const day = new Date().toISOString().slice(0, 10);
+        const fileName = section ? `ping-sms-backup-${section}-${day}.json` : `ping-sms-backup-${day}.json`;
 
-      if (isNativePlatform) {
-        // The phone's messages are streamed into the file natively (not loaded into the web layer), so even a
-        // very large inbox can't run the app out of memory. We only send the app's own data across the bridge.
-        appLog('backup: start');
-        const perms = await smsBridge.checkPermissions();
-        const extra = JSON.stringify(appData).slice(1, -1); // JSON members without the outer { }
-        appLog(`backup: readSms=${!!perms.readSms}, app data ${extra.length} chars; opening file picker`);
-        const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms);
-        appLog(`backup: native finished, saved=${res.saved}, count=${res.count}`);
-        if (!res.saved) return { ok: false, message: 'Backup cancelled' };
-        const count = res.count || messagesRef.current.length;
-        return { ok: true, message: `Backed up ${count} messages` };
+        // One section (Personal, Transactions, ...) or everything
+        let convs = conversationsRef.current;
+        let msgs = messagesRef.current;
+        let backupContacts = contacts;
+        let senderKeys: string[] | undefined;
+        if (section) {
+          convs = convs.filter((c) => c.category === section);
+          const ids = new Set(convs.map((c) => c.id));
+          msgs = msgs.filter((m) => ids.has(m.conversationId));
+          const contactIds = new Set(convs.map((c) => c.contactId).filter(Boolean));
+          backupContacts = contacts.filter((c) => contactIds.has(c.id));
+          // Same matching as the app uses to place a message in a conversation (numbers by last 10 digits, sender IDs by name)
+          senderKeys = Array.from(
+            new Set(
+              convs.map((c) => (isPhoneNumber(c.phoneNumber) ? `p:${phoneKey(c.phoneNumber)}` : `s:${c.phoneNumber.trim().toLowerCase()}`))
+            )
+          );
+        }
+        const appData = { section: section ?? null, conversations: convs, messages: msgs, contacts: backupContacts };
+        const label = section ? ` (${section})` : '';
+
+        if (isNativePlatform) {
+          // The phone's messages are streamed into the file natively (not loaded into the web layer), so even a
+          // very large inbox can't run the app out of memory. We only send the app's own data across the bridge.
+          appLog(`backup${label}: start`);
+          const perms = await smsBridge.checkPermissions();
+          const extra = JSON.stringify(appData).slice(1, -1); // JSON members without the outer { }
+          appLog(`backup${label}: readSms=${!!perms.readSms}, app data ${extra.length} chars; handing it to the app in pieces, then opening file picker`);
+          const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms, senderKeys);
+          appLog(`backup${label}: native finished, saved=${res.saved}, count=${res.count}`);
+          if (!res.saved) return { ok: false, message: 'Backup cancelled' };
+          const count = res.count || msgs.length;
+          return { ok: true, message: `Backed up ${count} messages${label}` };
+        }
+
+        const json = JSON.stringify({
+          app: 'Ping',
+          version: 3,
+          createdAt: new Date().toISOString(),
+          sms: [],
+          ...appData,
+        });
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
+        return { ok: true, message: `Backed up ${msgs.length} messages${label}` };
+      } catch (err) {
+        appLog('backup: FAILED', err);
+        return { ok: false, message: `Backup failed: ${err instanceof Error ? err.message : 'unknown error'}` };
       }
-
-      const json = JSON.stringify({
-        app: 'Ping',
-        version: 3,
-        createdAt: new Date().toISOString(),
-        sms: [],
-        ...appData,
-      });
-      const blob = new Blob([json], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      a.click();
-      URL.revokeObjectURL(url);
-      return { ok: true, message: `Backed up ${messagesRef.current.length} messages` };
-    } catch (err) {
-      appLog('backup: FAILED', err);
-      return { ok: false, message: `Backup failed: ${err instanceof Error ? err.message : 'unknown error'}` };
-    }
-  }, [isNativePlatform, contacts]);
+    },
+    [isNativePlatform, contacts]
+  );
 
   const restoreSmsFromJson = useCallback(
     async (jsonData: string): Promise<{ ok: boolean; message: string }> => {
@@ -1269,12 +1294,25 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { ok: false, message: 'That file is not a valid Ping backup.' };
       }
 
+      const section: string | null = typeof data?.section === 'string' ? data.section : null;
       if (hasState) {
-        setConversations(data.conversations);
-        setMessages(data.messages);
-        if (Array.isArray(data.contacts)) setContacts(data.contacts);
+        if (section) {
+          // A single-section backup is merged in: everything else you have now stays as it is
+          const mergeById = <T extends { id: string }>(current: T[], incoming: T[]): T[] => {
+            const byId = new Map(current.map((x) => [x.id, x] as const));
+            incoming.forEach((x) => byId.set(x.id, x));
+            return Array.from(byId.values());
+          };
+          setConversations((prev) => mergeById(prev, data.conversations));
+          setMessages((prev) => mergeById(prev, data.messages));
+          if (Array.isArray(data.contacts)) setContacts((prev) => mergeById(prev, data.contacts));
+        } else {
+          setConversations(data.conversations);
+          setMessages(data.messages);
+          if (Array.isArray(data.contacts)) setContacts(data.contacts);
+        }
       }
-      let note = hasState ? 'Restored your conversations in Ping.' : '';
+      let note = hasState ? (section ? `Restored your ${section} conversations in Ping.` : 'Restored your conversations in Ping.') : '';
 
       if (isNativePlatform && sms.length > 0) {
         if (isDefaultSms) {
