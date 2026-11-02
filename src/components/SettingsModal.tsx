@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { spring, springBouncy, fadeFast, useIsDesktop } from '../motion.ts';
 import {
@@ -25,6 +25,7 @@ import {
   Bug,
   Camera,
   Trash2,
+  Send,
 } from 'lucide-react';
 import type { ConversationCategory } from '../types.ts';
 import { useSMS } from '../context/SMSContext.tsx';
@@ -90,6 +91,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     conversations,
     toggleBlockConversation,
     backupSmsToFile,
+    countPaddhuExport,
+    sendTransactionsToPaddhu,
     restoreSmsFromJson,
     pickAndRestoreSms,
     cleanExpiredOtps,
@@ -109,6 +112,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+
+  // Send transaction SMS to Paddhu Pusthakam: date range (YYYY-MM-DD, your local days)
+  const localDay = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const [paddhuFrom, setPaddhuFrom] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return localDay(d);
+  });
+  const [paddhuTo, setPaddhuTo] = useState(() => localDay(new Date()));
+  const paddhuRange = useMemo(() => {
+    const f = new Date(`${paddhuFrom}T00:00:00`).getTime();
+    const t = new Date(`${paddhuTo}T23:59:59.999`).getTime();
+    return { f, t, valid: Number.isFinite(f) && Number.isFinite(t) && f <= t };
+  }, [paddhuFrom, paddhuTo]);
+  const paddhuCount = useMemo(
+    () => (paddhuRange.valid ? countPaddhuExport(paddhuRange.f, paddhuRange.t) : 0),
+    [paddhuRange, countPaddhuExport, conversations]
+  );
+  const setPaddhuQuickRange = (kind: 'month' | 'year' | 'all') => {
+    const now = new Date();
+    const from = kind === 'month' ? new Date(now.getFullYear(), now.getMonth(), 1) : kind === 'year' ? new Date(now.getFullYear(), 0, 1) : new Date(2000, 0, 1);
+    setPaddhuFrom(localDay(from));
+    setPaddhuTo(localDay(now));
+  };
+  const handleSendToPaddhu = async () => {
+    if (!paddhuRange.valid) {
+      showToast('Pick a valid date range');
+      return;
+    }
+    setBackupBusy(true);
+    showToast('Preparing messages for Paddhu Pusthakam...');
+    const result = await sendTransactionsToPaddhu(paddhuRange.f, paddhuRange.t);
+    setBackupBusy(false);
+    showToast(result.message);
+  };
   // Only the first screen is drawn while the panel slides in; the sections further down follow right after
   const [sectionsReady, setSectionsReady] = useState(false);
   useEffect(() => {
@@ -1124,6 +1163,65 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     </button>
                   );
                 })}
+              </div>
+            </div>
+
+            <div className="pt-3">
+              <p className="text-xs font-semibold text-m3-on-surface dark:text-white">Send to Paddhu Pusthakam</p>
+              <p className="text-[11px] text-m3-outline dark:text-m3-outline-dk mt-0.5">
+                Sends only bank and payment messages (debits, credits, card spends) of a date range, not OTPs,
+                promotions or chats with people. Pick Paddhu Pusthakam in the share sheet, then tick what to save
+                there.
+              </p>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <label className="flex items-center gap-2 text-[11px] text-m3-outline dark:text-m3-outline-dk">
+                  From
+                  <input
+                    type="date"
+                    value={paddhuFrom}
+                    onChange={(e) => setPaddhuFrom(e.target.value)}
+                    className="px-3 py-2 bg-m3-surface-hi dark:bg-m3-d3 rounded-xl text-xs text-m3-on-surface dark:text-white border border-m3-line dark:border-m3-d4"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-[11px] text-m3-outline dark:text-m3-outline-dk">
+                  To
+                  <input
+                    type="date"
+                    value={paddhuTo}
+                    onChange={(e) => setPaddhuTo(e.target.value)}
+                    className="px-3 py-2 bg-m3-surface-hi dark:bg-m3-d3 rounded-xl text-xs text-m3-on-surface dark:text-white border border-m3-line dark:border-m3-d4"
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-2">
+                {([
+                  ['month', 'This month'],
+                  ['year', 'This year'],
+                  ['all', 'All time'],
+                ] as const).map(([kind, label]) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    onClick={() => setPaddhuQuickRange(kind)}
+                    className="px-3 py-1.5 bg-m3-surface-hi dark:bg-m3-d3 hover:bg-m3-primary-container dark:hover:bg-m3-primary-deep text-[11px] font-semibold text-m3-primary dark:text-m3-primary-light rounded-full transition-colors"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={handleSendToPaddhu}
+                  disabled={backupBusy || !paddhuRange.valid || paddhuCount === 0}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-m3-surface-hi dark:bg-m3-d3 hover:bg-m3-primary-container dark:hover:bg-m3-primary-deep text-xs font-semibold text-m3-primary dark:text-m3-primary-light rounded-full transition-colors disabled:opacity-50"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send to Paddhu Pusthakam</span>
+                </button>
+                <span className="text-[11px] text-m3-outline dark:text-m3-outline-dk">
+                  {paddhuRange.valid ? `${paddhuCount} transaction messages in this range` : 'Check the dates'}
+                </span>
               </div>
             </div>
           </div>

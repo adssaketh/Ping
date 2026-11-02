@@ -23,7 +23,7 @@ import {
   SPAM_THRESHOLDS,
   SpamScore,
 } from '../spam/classifier.ts';
-import { soundFx, getAvatarColorClasses, extractOtpCode, getInitials, categorizeSms, categorizeThread } from '../utils/smsUtils.ts';
+import { soundFx, getAvatarColorClasses, extractOtpCode, getInitials, categorizeSms, categorizeThread, isTransactionSms } from '../utils/smsUtils.ts';
 import {
   smsBridge,
   isNativeAndroid,
@@ -172,6 +172,10 @@ interface SMSContextType {
   backupSmsToFile: (section?: ConversationCategory) => Promise<{ ok: boolean; message: string }>;
   restoreSmsFromJson: (jsonData: string) => Promise<{ ok: boolean; message: string }>;
   pickAndRestoreSms: () => Promise<{ ok: boolean; message: string }>;
+  /** How many transaction SMS fall in a date range (milliseconds, both ends included). */
+  countPaddhuExport: (fromMs: number, toMs: number) => number;
+  /** Opens the share sheet with the transaction SMS of a date range, to send them to Paddhu Pusthakam. */
+  sendTransactionsToPaddhu: (fromMs: number, toMs: number) => Promise<{ ok: boolean; message: string }>;
   cleanExpiredOtps: () => number;
   starredMessages: (Message & { conversation?: Conversation })[];
 }
@@ -1280,6 +1284,68 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [isNativePlatform, contacts]
   );
 
+  // ---------------------------------------------------------------
+  // Send transaction SMS to Paddhu Pusthakam (through Android's share sheet)
+  // ---------------------------------------------------------------
+  const paddhuExportRows = useCallback((fromMs: number, toMs: number) => {
+    const convById = new Map(conversationsRef.current.map((c) => [c.id, c]));
+    const rows: Array<{ id: string; address: string; body: string; date: number }> = [];
+    for (const m of messagesRef.current) {
+      if (m.sender === 'me') continue;
+      if (!m.id.startsWith(DEVICE_ID_PREFIX)) continue;
+      if (m.timestamp < fromMs || m.timestamp > toMs) continue;
+      const c = convById.get(m.conversationId);
+      // only business senders: people you know and phone numbers are never sent
+      if (!c || c.category === 'personal' || isPhoneNumber(c.phoneNumber)) continue;
+      // only real, completed money movements (not OTPs, reminders or promotions)
+      if (!isTransactionSms(m.text)) continue;
+      rows.push({ id: m.id.slice(DEVICE_ID_PREFIX.length), address: c.phoneNumber, body: m.text, date: m.timestamp });
+    }
+    rows.sort((a, b) => a.date - b.date);
+    return rows;
+  }, []);
+
+  const countPaddhuExport = useCallback(
+    (fromMs: number, toMs: number) => paddhuExportRows(fromMs, toMs).length,
+    [paddhuExportRows]
+  );
+
+  const sendTransactionsToPaddhu = useCallback(
+    async (fromMs: number, toMs: number): Promise<{ ok: boolean; message: string }> => {
+      try {
+        const rows = paddhuExportRows(fromMs, toMs);
+        if (rows.length === 0) return { ok: false, message: 'No transaction messages in that date range' };
+        const json = JSON.stringify({
+          app: 'Ping',
+          type: 'paddhu-sms-export',
+          version: 1,
+          createdAt: new Date().toISOString(),
+          from: fromMs,
+          to: toMs,
+          sms: rows,
+        });
+        appLog(`paddhu export: ${rows.length} messages, ${json.length} chars; opening the share sheet`);
+        if (isNativePlatform) {
+          const res = await smsBridge.shareJsonFile(json, 'Send to Paddhu Pusthakam');
+          if (!res.shared) return { ok: false, message: 'Could not open the share sheet' };
+          return { ok: true, message: `Sharing ${rows.length} transaction messages. Choose Paddhu Pusthakam.` };
+        }
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'ping-sms-for-paddhu.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        return { ok: true, message: `Saved ${rows.length} transaction messages to a file` };
+      } catch (err) {
+        appLog('paddhu export: FAILED', err);
+        return { ok: false, message: `Could not send: ${err instanceof Error ? err.message : 'unknown error'}` };
+      }
+    },
+    [isNativePlatform, paddhuExportRows]
+  );
+
   const restoreSmsFromJson = useCallback(
     async (jsonData: string): Promise<{ ok: boolean; message: string }> => {
       let data: any;
@@ -1992,6 +2058,8 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     markAsUnread,
     startNewConversation,
     backupSmsToFile,
+    countPaddhuExport,
+    sendTransactionsToPaddhu,
     restoreSmsFromJson,
     pickAndRestoreSms,
     cleanExpiredOtps,

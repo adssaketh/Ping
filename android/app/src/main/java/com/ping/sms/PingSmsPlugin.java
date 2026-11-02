@@ -3,6 +3,7 @@ package com.ping.sms;
 import android.Manifest;
 import android.app.Activity;
 import android.app.role.RoleManager;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.ContentValues;
 import android.content.ContentUris;
@@ -36,6 +37,7 @@ import java.util.Set;
 import androidx.core.app.ActivityCompat;
 import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.JSArray;
@@ -513,6 +515,11 @@ public class PingSmsPlugin extends Plugin {
         return new java.io.File(ctx.getCacheDir(), "ping-backup-staging.json");
     }
 
+    /** The JSON file handed to another app (Paddhu Pusthakam) through the share sheet. */
+    private static java.io.File shareStagingFile(Context ctx) {
+        return new java.io.File(ctx.getCacheDir(), "ping-sms-for-paddhu.json");
+    }
+
     /** Android SMS ids (one per line) of the messages in the section being backed up. */
     private static java.io.File backupFilterFile(Context ctx) {
         return new java.io.File(ctx.getCacheDir(), "ping-backup-filter.txt");
@@ -528,8 +535,11 @@ public class PingSmsPlugin extends Plugin {
     public void stageBackupData(PluginCall call) {
         String chunk = call.getString("chunk", "");
         boolean reset = Boolean.TRUE.equals(call.getBoolean("reset", false));
-        boolean forFilter = "filter".equals(call.getString("target", ""));
-        java.io.File target = forFilter ? backupFilterFile(getContext()) : backupStagingFile(getContext());
+        String targetName = call.getString("target", "");
+        boolean forFilter = "filter".equals(targetName);
+        java.io.File target = "share".equals(targetName)
+            ? shareStagingFile(getContext())
+            : (forFilter ? backupFilterFile(getContext()) : backupStagingFile(getContext()));
         try (java.io.OutputStreamWriter w = new java.io.OutputStreamWriter(
                 new java.io.FileOutputStream(target, !reset), StandardCharsets.UTF_8)) {
             w.write(chunk);
@@ -538,6 +548,36 @@ public class PingSmsPlugin extends Plugin {
             return;
         }
         call.resolve();
+    }
+
+    /**
+     * Opens Android's share sheet with the staged JSON file (see stageBackupData, target "share"), so the user can
+     * send it straight to another app such as Paddhu Pusthakam. The file is shared through the app's FileProvider.
+     */
+    @PluginMethod
+    public void shareStagedFile(PluginCall call) {
+        Context context = getContext();
+        java.io.File file = shareStagingFile(context);
+        if (!file.exists() || file.length() == 0) {
+            call.reject("There is nothing to send");
+            return;
+        }
+        try {
+            Uri uri = FileProvider.getUriForFile(context, context.getPackageName() + ".fileprovider", file);
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("application/json");
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.setClipData(ClipData.newRawUri("Ping SMS", uri));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Send to Paddhu Pusthakam"));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            getActivity().startActivity(chooser);
+            JSObject ret = new JSObject();
+            ret.put("shared", true);
+            call.resolve(ret);
+        } catch (Throwable e) {
+            call.reject("Could not open the share sheet: " + e.getMessage());
+        }
     }
 
     /**

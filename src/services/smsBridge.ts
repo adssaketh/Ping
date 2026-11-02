@@ -80,7 +80,8 @@ interface PingSmsPluginInterface {
   readContactPhotos(options: { ids: string[]; size?: number }): Promise<{ photos: Record<string, string> }>;
   showKeyboard(): Promise<void>;
   exitApp(): Promise<void>;
-  stageBackupData(options: { chunk: string; reset?: boolean; target?: 'filter' }): Promise<void>;
+  stageBackupData(options: { chunk: string; reset?: boolean; target?: 'filter' | 'share' }): Promise<void>;
+  shareStagedFile(options?: { title?: string }): Promise<{ shared: boolean }>;
   saveBackupFile(options: { fileName: string; includeSms: boolean; filtered?: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }>;
@@ -313,6 +314,28 @@ export const smsBridge = {
       i = end;
     }
     return PingSms.saveBackupFile({ fileName, includeSms, filtered: !!smsIds });
+  },
+
+  /**
+   * Opens Android's share sheet with a JSON file (used to send transaction SMS to Paddhu Pusthakam).
+   * The text goes over in small pieces into a temporary file, like the backup data, so a big range never makes
+   * one oversized bridge call.
+   */
+  async shareJsonFile(json: string, title?: string): Promise<{ shared: boolean }> {
+    if (!isNativeAndroid()) return { shared: false };
+    const CHUNK = 400_000;
+    await PingSms.stageBackupData({ chunk: '', reset: true, target: 'share' });
+    let i = 0;
+    while (i < json.length) {
+      let end = Math.min(i + CHUNK, json.length);
+      if (end < json.length) {
+        const c = json.charCodeAt(end - 1);
+        if (c >= 0xd800 && c <= 0xdbff) end--; // do not split a surrogate pair between pieces
+      }
+      await PingSms.stageBackupData({ chunk: json.slice(i, end), target: 'share' });
+      i = end;
+    }
+    return PingSms.shareStagedFile({ title });
   },
 
   /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */
