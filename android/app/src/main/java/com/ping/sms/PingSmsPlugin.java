@@ -513,20 +513,9 @@ public class PingSmsPlugin extends Plugin {
         return new java.io.File(ctx.getCacheDir(), "ping-backup-staging.json");
     }
 
-    /** Sender keys (one per line) of the section being backed up; see addressKey(). */
+    /** Android SMS ids (one per line) of the messages in the section being backed up. */
     private static java.io.File backupFilterFile(Context ctx) {
         return new java.io.File(ctx.getCacheDir(), "ping-backup-filter.txt");
-    }
-
-    /** Same idea as phoneKey()/sender matching in the web app: numbers by their last 10 digits, sender IDs by name. */
-    private static String addressKey(String address) {
-        String t = address == null ? "Unknown" : address.trim();
-        if (t.matches("^\\+?[\\d\\s\\-()]{7,}$")) {
-            String d = t.replaceAll("\\D", "");
-            if (d.length() >= 10) d = d.substring(d.length() - 10);
-            return "p:" + d;
-        }
-        return "s:" + t.toLowerCase(java.util.Locale.ROOT);
     }
 
     /**
@@ -612,23 +601,30 @@ public class PingSmsPlugin extends Plugin {
                     }
                     cursor = context.getContentResolver().query(
                         Uri.parse("content://sms/"),
-                        new String[] { "address", "body", "date", "read", "type" },
+                        new String[] { "_id", "thread_id", "address", "body", "date", "read", "type" },
                         null,
                         null,
                         "date DESC"
                     );
                     if (cursor != null) {
+                        int iId = cursor.getColumnIndexOrThrow("_id");
+                        int iThread = cursor.getColumnIndexOrThrow("thread_id");
                         int iAddr = cursor.getColumnIndexOrThrow("address");
                         int iBody = cursor.getColumnIndexOrThrow("body");
                         int iDate = cursor.getColumnIndexOrThrow("date");
                         int iRead = cursor.getColumnIndexOrThrow("read");
                         int iType = cursor.getColumnIndexOrThrow("type");
                         while (cursor.moveToNext()) {
+                            String smsId = cursor.getString(iId);
+                            // A section backup takes exactly the messages the app shows in that section (matched by id),
+                            // so the phone SMS and the app's own messages line up one to one.
+                            if (allowed != null && !allowed.contains(smsId)) continue;
                             String address = cursor.getString(iAddr);
-                            if (allowed != null && !allowed.contains(addressKey(address))) continue;
                             String body = cursor.getString(iBody);
                             if (count > 0) w.write(',');
-                            w.write("{\"address\":");
+                            w.write("{\"id\":" + JSObject.quote(smsId != null ? smsId : ""));
+                            w.write(",\"threadId\":" + JSObject.quote(cursor.getString(iThread) != null ? cursor.getString(iThread) : ""));
+                            w.write(",\"address\":");
                             w.write(JSObject.quote(address != null ? address : "Unknown"));
                             w.write(",\"body\":");
                             w.write(JSObject.quote(body != null ? body : ""));

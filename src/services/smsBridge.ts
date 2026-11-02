@@ -290,12 +290,18 @@ export const smsBridge = {
     fileName: string,
     extra: string,
     includeSms: boolean,
-    /** Only back up phone messages from these sender keys (one section); omit for everything. */
-    senderKeys?: string[]
+    /** Only back up the phone messages with these Android SMS ids (one section); omit for everything. */
+    smsIds?: string[]
   ): Promise<{ saved: boolean; count?: number }> {
     const CHUNK = 400_000;
     await PingSms.stageBackupData({ chunk: '', reset: true });
-    await PingSms.stageBackupData({ chunk: senderKeys ? senderKeys.join('\n') : '', reset: true, target: 'filter' });
+    await PingSms.stageBackupData({ chunk: '', reset: true, target: 'filter' });
+    if (smsIds) {
+      // ids go over in pieces too, so a big section never makes one oversized bridge call
+      for (let k = 0; k < smsIds.length; k += 20000) {
+        await PingSms.stageBackupData({ chunk: smsIds.slice(k, k + 20000).join('\n') + '\n', target: 'filter' });
+      }
+    }
     let i = 0;
     while (i < extra.length) {
       let end = Math.min(i + CHUNK, extra.length);
@@ -306,7 +312,7 @@ export const smsBridge = {
       await PingSms.stageBackupData({ chunk: extra.slice(i, end) });
       i = end;
     }
-    return PingSms.saveBackupFile({ fileName, includeSms, filtered: !!senderKeys });
+    return PingSms.saveBackupFile({ fileName, includeSms, filtered: !!smsIds });
   },
 
   /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */

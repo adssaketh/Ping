@@ -1226,19 +1226,16 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let convs = conversationsRef.current;
         let msgs = messagesRef.current;
         let backupContacts = contacts;
-        let senderKeys: string[] | undefined;
+        let smsIds: string[] | undefined;
         if (section) {
           convs = convs.filter((c) => c.category === section);
           const ids = new Set(convs.map((c) => c.id));
           msgs = msgs.filter((m) => ids.has(m.conversationId));
           const contactIds = new Set(convs.map((c) => c.contactId).filter(Boolean));
           backupContacts = contacts.filter((c) => contactIds.has(c.id));
-          // Same matching as the app uses to place a message in a conversation (numbers by last 10 digits, sender IDs by name)
-          senderKeys = Array.from(
-            new Set(
-              convs.map((c) => (isPhoneNumber(c.phoneNumber) ? `p:${phoneKey(c.phoneNumber)}` : `s:${c.phoneNumber.trim().toLowerCase()}`))
-            )
-          );
+          // The phone's messages for this section are picked by Android SMS id, exactly the ones the app shows in it
+          // (conversations follow Android threads, so matching by sender name could pull in other threads' messages).
+          smsIds = msgs.filter((m) => m.id.startsWith(DEVICE_ID_PREFIX)).map((m) => m.id.slice(DEVICE_ID_PREFIX.length));
         }
         const appData = { section: section ?? null, conversations: convs, messages: msgs, contacts: backupContacts };
         const label = section ? ` (${section})` : '';
@@ -1250,7 +1247,7 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const perms = await smsBridge.checkPermissions();
           const extra = JSON.stringify(appData).slice(1, -1); // JSON members without the outer { }
           appLog(`backup${label}: readSms=${!!perms.readSms}, app data ${extra.length} chars; handing it to the app in pieces, then opening file picker`);
-          const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms, senderKeys);
+          const res = await smsBridge.saveBackupFile(fileName, extra, !!perms.readSms, smsIds);
           appLog(`backup${label}: native finished, saved=${res.saved}, count=${res.count}`);
           if (!res.saved) return { ok: false, message: 'Backup cancelled' };
           const count = res.count || msgs.length;
