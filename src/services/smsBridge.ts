@@ -11,6 +11,19 @@ export interface NativeSmsMessage {
   isSent: boolean;
 }
 
+/** What the "send new bank messages to Paddhu Pusthakam automatically" feature is doing right now. */
+export interface PaddhuAutoSendStatus {
+  enabled: boolean;
+  /** Paddhu Pusthakam is installed on this phone */
+  installed: boolean;
+  /** When a message last went over (ms since 1970), 0 when none has yet */
+  lastSentAt: number;
+  /** Messages waiting because Paddhu Pusthakam could not be reached */
+  pending: number;
+  /** The last problem, '' when there was none since the last success */
+  lastError: string;
+}
+
 export interface BackupSms {
   address: string;
   body: string;
@@ -83,6 +96,8 @@ interface PingSmsPluginInterface {
   stageBackupData(options: { chunk: string; reset?: boolean; target?: 'filter' | 'share' }): Promise<void>;
   shareStagedFile(options?: { title?: string }): Promise<{ shared: boolean }>;
   sendSmsToPaddhu(options: { json: string }): Promise<{ opened: boolean }>;
+  setPaddhuAutoSend(options: { enabled: boolean }): Promise<void>;
+  getPaddhuAutoSendStatus(): Promise<PaddhuAutoSendStatus>;
   saveBackupFile(options: { fileName: string; includeSms: boolean; filtered?: boolean }): Promise<{ saved: boolean; count?: number }>;
   pickBackupFile(): Promise<{ content?: string; cancelled?: boolean }>;
   getNativeLogs(): Promise<{ crash: string; exits: string; logcat: string }>;
@@ -343,6 +358,26 @@ export const smsBridge = {
   async sendSmsToPaddhu(json: string): Promise<{ opened: boolean }> {
     if (!isNativeAndroid()) return { opened: false };
     return PingSms.sendSmsToPaddhu({ json });
+  },
+
+  /** Turns the automatic hand-over of new bank messages to Paddhu Pusthakam on or off (read by SmsReceiver). */
+  async setPaddhuAutoSend(enabled: boolean): Promise<void> {
+    if (!isNativeAndroid()) return;
+    try {
+      await PingSms.setPaddhuAutoSend({ enabled });
+    } catch (err) {
+      console.warn('setPaddhuAutoSend failed:', err);
+    }
+  },
+
+  async getPaddhuAutoSendStatus(): Promise<PaddhuAutoSendStatus | null> {
+    if (!isNativeAndroid()) return null;
+    try {
+      return await PingSms.getPaddhuAutoSendStatus();
+    } catch (err) {
+      console.warn('getPaddhuAutoSendStatus failed:', err);
+      return null;
+    }
   },
 
   /** Crash reports, recent process-exit reasons and this app's recent system log, for Settings > Logs. */

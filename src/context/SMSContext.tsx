@@ -58,6 +58,7 @@ export const DEFAULT_SETTINGS: SmsAppSettings = {
   spamBlock: [],
   spamLearned: {},
   emergencyAlerts: true,
+  paddhuAutoSend: false,
   tappableLinks: true,
   privacyAcceptedVersion: null,
   showCategoriesTabs: true,
@@ -831,6 +832,11 @@ export const SMSProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const score = scoreSms(body, settings.spamLearned);
     return !!score && isSpamScore(score, sender, settings.spamSensitivity);
   };
+
+  // Let the Android side know whether new bank messages go to Paddhu Pusthakam by themselves
+  useEffect(() => {
+    smsBridge.setPaddhuAutoSend(settings.paddhuAutoSend === true);
+  }, [settings.paddhuAutoSend]);
 
   // Let the Android side know, so spam notifications stay silent even when Ping is closed
   useEffect(() => {

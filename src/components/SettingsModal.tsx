@@ -32,6 +32,7 @@ import { useSMS } from '../context/SMSContext.tsx';
 import { ProfileAvatar } from './ProfileAvatar.tsx';
 import { profilePhotoEditor } from '../utils/profilePhotoEditor.ts';
 import { smsBridge } from '../services/smsBridge.ts';
+import type { PaddhuAutoSendStatus } from '../services/smsBridge.ts';
 import { ThemePicker } from './ThemePicker.tsx';
 
 /** A row of pill buttons where exactly one is selected. */
@@ -112,6 +113,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [backupBusy, setBackupBusy] = useState(false);
+
+  // Send new bank messages to Paddhu Pusthakam by themselves: what the Android side reports
+  const [paddhuStatus, setPaddhuStatus] = useState<PaddhuAutoSendStatus | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    // a moment after a switch change, so the Android side has stored it
+    const t = window.setTimeout(() => {
+      smsBridge.getPaddhuAutoSendStatus().then((st) => {
+        if (!cancelled) setPaddhuStatus(st);
+      });
+    }, 400);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [settings.paddhuAutoSend]);
 
   // Send transaction SMS to Paddhu Pusthakam: date range (YYYY-MM-DD, your local days)
   const localDay = (d: Date) =>
@@ -1165,6 +1182,51 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 })}
               </div>
             </div>
+
+            {paddhuStatus && (
+              <div className="pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold text-m3-on-surface dark:text-white">
+                      Send new bank messages automatically
+                    </p>
+                    <p className="text-[11px] text-m3-outline dark:text-m3-outline-dk mt-0.5">
+                      Each new bank or payment message is handed to Paddhu Pusthakam in the background, without
+                      opening it. Paddhu Pusthakam saves the ones it is sure about (a known account and merchant)
+                      when you next open it, and keeps the rest in a review list. Messages from people and spam
+                      are never sent.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateSettings({ paddhuAutoSend: !settings.paddhuAutoSend })}
+                    className={`w-11 h-6 rounded-full transition-colors relative p-0.5 shrink-0 ${
+                      settings.paddhuAutoSend ? 'bg-m3-primary' : 'bg-m3-variant-dk dark:bg-m3-variant'
+                    }`}
+                    aria-pressed={settings.paddhuAutoSend}
+                    aria-label="Send new bank messages to Paddhu Pusthakam automatically"
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                        settings.paddhuAutoSend ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+                {settings.paddhuAutoSend && (
+                  <p className="text-[11px] text-m3-outline dark:text-m3-outline-dk mt-1.5">
+                    {!paddhuStatus.installed
+                      ? 'Paddhu Pusthakam is not installed on this phone.'
+                      : paddhuStatus.lastSentAt > 0
+                        ? `Last message sent ${new Date(paddhuStatus.lastSentAt).toLocaleString()}.`
+                        : 'Nothing sent yet. The next bank message will go over.'}
+                    {paddhuStatus.pending > 0 &&
+                      ` ${paddhuStatus.pending} waiting because Paddhu Pusthakam could not be reached.`}
+                    {paddhuStatus.lastError && ` Last problem: ${paddhuStatus.lastError}`}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="pt-3">
               <p className="text-xs font-semibold text-m3-on-surface dark:text-white">Send to Paddhu Pusthakam</p>

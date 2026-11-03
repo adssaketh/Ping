@@ -83,6 +83,14 @@ public class PingSmsPlugin extends Plugin {
         super.load();
         instance = this;
         installCrashLogger(getContext().getApplicationContext());
+        // bank messages that could not be handed to Paddhu Pusthakam earlier (see PaddhuInbox)
+        final Context appContext = getContext().getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                PaddhuInbox.flushOutbox(appContext);
+            }
+        }, "ping-to-paddhu-flush").start();
     }
 
     // ---------------- Logs (Settings > Logs) ----------------
@@ -601,6 +609,44 @@ public class PingSmsPlugin extends Plugin {
         } catch (Throwable e) {
             call.reject("Could not open Paddhu Pusthakam: " + e.getMessage());
         }
+    }
+
+    /** Switches "send new bank messages to Paddhu Pusthakam automatically" on or off (see PaddhuInbox). */
+    @PluginMethod
+    public void setPaddhuAutoSend(PluginCall call) {
+        final boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        final Context context = getContext().getApplicationContext();
+        PaddhuInbox.setEnabled(context, enabled);
+        if (enabled) {
+            // anything that could not be delivered earlier, off the main thread
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    PaddhuInbox.flushOutbox(context);
+                }
+            }, "ping-to-paddhu-flush").start();
+        }
+        call.resolve();
+    }
+
+    /** For the settings screen: whether Paddhu Pusthakam is installed, when a message last went over, and what is waiting. */
+    @PluginMethod
+    public void getPaddhuAutoSendStatus(PluginCall call) {
+        Context context = getContext();
+        boolean installed;
+        try {
+            context.getPackageManager().getPackageInfo(PaddhuShare.PADDHU_PACKAGE, 0);
+            installed = true;
+        } catch (PackageManager.NameNotFoundException e) {
+            installed = false;
+        }
+        JSObject ret = new JSObject();
+        ret.put("enabled", PaddhuInbox.isEnabled(context));
+        ret.put("installed", installed);
+        ret.put("lastSentAt", PaddhuInbox.lastSentAt(context));
+        ret.put("pending", PaddhuInbox.pendingCount(context));
+        ret.put("lastError", PaddhuInbox.lastError(context));
+        call.resolve(ret);
     }
 
     /**

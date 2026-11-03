@@ -74,12 +74,35 @@ public class SmsReceiver extends BroadcastReceiver {
         PingSmsPlugin.notifyIncomingSms(sender, body, timestamp, subscriptionId);
 
         // 3. Show System Notification
-        showNotification(context, sender, body, timestamp);
+        boolean spam = showNotification(context, sender, body, timestamp);
+
+        // 4. Hand bank messages to Paddhu Pusthakam by themselves, when that is switched on in Ping's settings.
+        //    The hand-over is a call to another app, so it runs off the main thread; goAsync keeps this receiver
+        //    alive until it is done.
+        if (!spam && PaddhuInbox.shouldSend(context, sender, body)) {
+            sendToPaddhuInBackground(context, sender, body, timestamp);
+        }
     }
 
-    private void showNotification(Context context, String sender, String body, long timestamp) {
+    private void sendToPaddhuInBackground(final Context context, final String sender, final String body, final long timestamp) {
+        final PendingResult pending = goAsync();
+        final Context appContext = context.getApplicationContext();
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    PaddhuInbox.submit(appContext, sender, body, timestamp);
+                } finally {
+                    if (pending != null) pending.finish();
+                }
+            }
+        }, "ping-to-paddhu").start();
+    }
+
+    /** Shows the notification. Returns true when the message was treated as spam (shown quietly). */
+    private boolean showNotification(Context context, String sender, String body, long timestamp) {
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        if (manager == null) return;
+        if (manager == null) return false;
 
         // Suspected spam still arrives, but silently (no pop-up, no sound)
         boolean spam = SpamFilter.isSpam(context, sender, body);
@@ -148,7 +171,7 @@ public class SmsReceiver extends BroadcastReceiver {
         // (Android hides OTP-like notification text from other apps, so Ping hands the SMS over itself.)
         if (!spam && !PaddhuShare.looksLikePhoneNumber(sender) && PaddhuShare.isTransactionSms(body)) {
             try {
-                String smsId = "n" + timestamp + "-" + Integer.toHexString(body.hashCode());
+                String smsId = PaddhuInbox.smsId(body, timestamp);
                 Intent paddhuIntent = PaddhuShare.intentFor(PaddhuShare.exportJson(smsId, sender, body, timestamp));
                 PendingIntent paddhuPending = PendingIntent.getActivity(context, notificationId + 1, paddhuIntent, flags);
                 builder.addAction(new NotificationCompat.Action.Builder(0, "Add to Paddhu", paddhuPending).build());
@@ -158,5 +181,6 @@ public class SmsReceiver extends BroadcastReceiver {
         }
 
         manager.notify(notificationId, builder.build());
+        return spam;
     }
 }

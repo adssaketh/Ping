@@ -116,6 +116,8 @@ export interface SmsAppSettings {
   /** Small per-word score adjustments learned from the user's Not spam / Report spam taps (on this phone only) */
   spamLearned: Record<string, number>;
   emergencyAlerts: boolean;
+  /** Send each new bank / payment message to Paddhu Pusthakam by itself (Android only, see PaddhuInbox.java) */
+  paddhuAutoSend: boolean;
 
   /** Web links in messages can be tapped (Ping asks before opening one). Off: links stay plain text. */
   tappableLinks: boolean;
