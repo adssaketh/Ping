@@ -45,6 +45,19 @@ public final class PaddhuShare {
         return AMOUNT.matcher(body).find() && MOVED.matcher(body).find();
     }
 
+    private static final Pattern FD_WORD = Pattern.compile(
+        "fixed\\s*deposit|term\\s*deposit|\\bF\\.?D\\.?R?\\b|\\bT\\.?D\\.?R?\\b", CI);
+    private static final Pattern FD_BOOKED = Pattern.compile(
+        "\\b(book(?:ed|ing)?|open(?:ed)?|creat(?:ed|ion)|renew(?:ed|al)?|placed|constitut(?:ed)?|established|set up)\\b", CI);
+    private static final Pattern FD_NOT = Pattern.compile(
+        "\\b(matured|closed|closure|premature|broken|liquidat|interest (?:has been )?credited|proceeds)\\b|\\botp\\b|will mature|is maturing|due for", CI);
+
+    /** A fixed deposit being booked or renewed (Paddhu Pusthakam adds it to its Fixed deposits page). */
+    public static boolean isFixedDepositSms(String body) {
+        if (body == null || body.isEmpty()) return false;
+        return FD_WORD.matcher(body).find() && FD_BOOKED.matcher(body).find() && !FD_NOT.matcher(body).find();
+    }
+
     /** Messages from people (phone numbers) are never sent. */
     public static boolean looksLikePhoneNumber(String sender) {
         return sender == null || PHONE.matcher(sender.trim()).matches();

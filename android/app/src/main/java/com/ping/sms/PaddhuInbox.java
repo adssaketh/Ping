@@ -52,7 +52,7 @@ final class PaddhuInbox {
     static boolean shouldSend(Context context, String sender, String body) {
         return isEnabled(context)
             && !PaddhuShare.looksLikePhoneNumber(sender)
-            && PaddhuShare.isTransactionSms(body);
+            && (PaddhuShare.isTransactionSms(body) || PaddhuShare.isFixedDepositSms(body));
     }
 
     /** The id used for this SMS everywhere (also by the notification button). */
