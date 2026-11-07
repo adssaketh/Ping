@@ -61,3 +61,9 @@ close to the 11.1 ms 90 Hz interval), and the cost does NOT depend on the blur r
 was warm-up and heat. Risks: little GPU headroom; the real inbox rows (shadows, photos) will cost more than the synthetic ones; battery use not measured;
 the "deadline" values (24.8 / 35.9 ms) are pipeline deadlines, so glass probably queues more frames (my reading, untested).
 Decision: keep glass as built (default stays Solid like today); re-measure on the real inbox in Phase 3 and with Macrobenchmark in Phase 7.
+
+## CI result (7 Nov 2026)
+Workflow "Build native Ping (Kotlin)" is green on runs #1 and #2. Artifacts ping-native-dev-release-apk and ping-native-prod-release-apk
+are RELEASE builds (signed with the PING_KEY* secrets; the verify step also checked package names, dev read-only permissions and one shared certificate).
+Still to verify in Phase 7: that this certificate equals the one on the Ping installed today (apksigner --print-certs on both).
+A Node.js 20 deprecation warning appears (tool versions, not a failure).
