@@ -45,3 +45,11 @@ Branch `native-rewrite`. New Kotlin + Compose project in `native/` (the old web 
 Install `ping-dev-release-TESTKEY.apk` (signed with a throwaway key, installs next to Ping, cannot send or receive SMS). Open "Glass bar prototype", tap the gear button, then "Run 10 s scroll test" once per setting:
 Solid; Glass strong 62 %; Glass medium 62 %; Glass soft 62 %; Glass strong 95 %; edge off. Use "Copy all results" and paste them to me.
 Read: p95/p99 under the budget (16.7 ms at 60 Hz, 8.3 ms at 120 Hz) and a low "over budget" percentage = steady. Don't use the debug APK for numbers.
+
+## Glass frame-time result (user's phone, 7 Nov 2026, "Full comparison")
+Median of 3 interleaved rounds, 8 s each, after warm-up, 90 Hz, synthetic 2,000-row list.
+Solid: avg 8.69 ms, p99 15.33, GPU p95 2.73, missed 0.1%.
+Glass 28/18/10 px at 67%: avg 13.4-13.9 ms, p99 16.3-16.5, GPU p95 9.2-9.9, missed 0.1%.
+Glass holds a steady frame rate, costs about +5 ms/frame (+7 ms GPU), cost does not depend on blur radius.
+Risks: little GPU headroom, real rows will cost more, battery not measured.
+Decision: keep glass as built (default stays Solid); re-measure on the real inbox in Phase 3 and in Phase 7.
