@@ -134,6 +134,7 @@ fun GalleryScreen(mode: ThemeMode, onMode: (ThemeMode) -> Unit, wallpaper: Boole
                     }
                 }
             }
+            Section("Font check (compare with the old Ping text)") { FontCheck() }
             Section("Logo") { Box(Modifier.padding(horizontal = 20.dp)) { PingLogo() } }
             Section("Collapsing top bar (tap to toggle)") {
                 Box(Modifier.background(c.screen)) { PingTopBar(collapsed, { collapsed = !collapsed }) }
