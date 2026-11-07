@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Window theme only; all UI colours come from PingTheme (Compose). No AppCompat / Material components. -->
+    <style name="Theme.Ping" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/ping_window_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+    <color name="ping_window_bg">#F8FAFD</color>
+</resources>

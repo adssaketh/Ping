@@ -1,0 +1,110 @@
+name: Build native Ping (Kotlin)
+
+# Builds the native rewrite (folder native/) on branch native-rewrite. The old web/Capacitor app keeps building from
+# main with build-android.yml; this workflow never touches it.
+on:
+  push:
+    branches: [ native-rewrite ]
+  workflow_dispatch:
+
+jobs:
+  native:
+    name: Test and build dev + prod
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: native
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.9.0'
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Restore files that are not stored in this folder (binary assets and generated code)
+        working-directory: .
+        run: |
+          set -e
+          R=native/app/src/main/res
+          mkdir -p $R/drawable-nodpi
+          for d in mipmap-hdpi mipmap-mdpi mipmap-xhdpi mipmap-xxhdpi mipmap-xxxhdpi; do
+            mkdir -p $R/$d; cp android/app/src/main/res/$d/*.png $R/$d/
+          done
+          cp public/ping-logo-text.png $R/drawable-nodpi/ping_logo_text.png
+          cp public/ping-logo-dot.png  $R/drawable-nodpi/ping_logo_dot.png
+          npm ci || npm install --legacy-peer-deps
+          mkdir -p native/app/src/main/java/com/ping/sms/ui/icons
+          node native/tools/icons/gen-icons.mjs
+          node --experimental-strip-types native/tools/golden/gen-golden.mjs
+
+      - name: Install Android SDK platform 37
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37.0" "build-tools;37.0.0" > /dev/null
+
+      - name: Unit tests (golden vectors from the old TypeScript)
+        run: gradle :app:testDevDebugUnitTest --no-daemon
+
+      - name: Build signed release APKs (or debug APKs when no key is set up)
+        id: build
+        env:
+          PING_KEYSTORE_BASE64: ${{ secrets.PING_KEYSTORE_BASE64 }}
+          PING_KEYSTORE_PASSWORD: ${{ secrets.PING_KEYSTORE_PASSWORD }}
+          PING_KEY_ALIAS: ${{ secrets.PING_KEY_ALIAS }}
+          PING_KEY_PASSWORD: ${{ secrets.PING_KEY_PASSWORD }}
+        run: |
+          if [ -n "$PING_KEYSTORE_BASE64" ]; then
+            echo "$PING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/ping-release.jks"
+            export PING_KEYSTORE_PATH="$RUNNER_TEMP/ping-release.jks"
+            gradle :app:assembleDevRelease :app:assembleProdRelease --no-daemon
+            echo "kind=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing key (see SIGNING.md): building debug APKs. They will NOT install over the current Ping."
+            gradle :app:assembleDevDebug :app:assembleProdDebug --no-daemon
+            echo "kind=debug" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the APKs (package names, dev is read-only, same signing certificate)
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/37.0.0"
+          K=${{ steps.build.outputs.kind }}
+          DEV=$(ls app/build/outputs/apk/dev/$K/*.apk | head -1)
+          PROD=$(ls app/build/outputs/apk/prod/$K/*.apk | head -1)
+          echo "dev:  $DEV"; echo "prod: $PROD"
+          "$BT/aapt2" dump badging "$DEV"  | grep -E "^package: name='com.ping.sms.dev'"
+          "$BT/aapt2" dump badging "$PROD" | grep -E "^package: name='com.ping.sms'"
+          "$BT/aapt2" dump badging "$DEV"  | grep -E "application-label:'Ping Dev'"
+          # dev must not be able to send, receive as default app, or touch real messages
+          if "$BT/aapt2" dump permissions "$DEV" | grep -E "SEND_SMS|RECEIVE_SMS|RECEIVE_MMS|RECEIVE_WAP_PUSH"; then
+            echo "dev build declares a write/receive SMS permission"; exit 1; fi
+          "$BT/aapt2" dump permissions "$PROD" | grep -q "SEND_SMS"
+          if [ "$K" = "release" ]; then
+            "$BT/apksigner" verify --print-certs "$DEV"  | tee /tmp/dev.cert
+            "$BT/apksigner" verify --print-certs "$PROD" | tee /tmp/prod.cert
+            diff <(grep "SHA-256" /tmp/dev.cert) <(grep "SHA-256" /tmp/prod.cert)
+            echo "Both builds use the same signing certificate (SHA-256 above)."
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ping-native-dev-${{ steps.build.outputs.kind }}-apk
+          path: native/app/build/outputs/apk/dev/${{ steps.build.outputs.kind }}/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ping-native-prod-${{ steps.build.outputs.kind }}-apk
+          path: native/app/build/outputs/apk/prod/${{ steps.build.outputs.kind }}/*.apk
+          if-no-files-found: error
+          retention-days: 30
