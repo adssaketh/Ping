@@ -24,7 +24,7 @@ Branch `native-rewrite`. New Kotlin + Compose project in `native/` (the old web 
 - CI not run on GitHub; Part C push not done by me.
 
 **Unknown:**
-1. The font face in the screenshots (CSS stack with no font files). Need your phone model + Android version (+ launcher/OS skin). Interim `PingFonts` asks the phone for the same stack.
+1. ~~The font face in the screenshots~~ RESOLVED: phone is a OnePlus 13R (CPH2691), ColorOS 17.0, Android 17, system font One Sans, font size and weight Default. The on-device Font check (gallery) showed Google Sans, Google Sans Text, Roboto Flex, Roboto and sans-serif are all "same as system default", so the old CSS stack fell through to One Sans (proprietary, cannot be bundled). Decision (awaiting user confirmation): no font is bundled; `PingFonts` asks for the same stack in the same order. Residual uncertainty: Chromium's own matching was not probed, but the rendered sample matches the old Ping text by eye.
 2. Whether glass holds a steady frame rate on your phone (the measurement is yours to run, below).
 3. Whether the old WebView text followed the phone's font scale; native uses `sp`.
 4. `dropShadow` radius mapping (I used CSS blur / 2). Needs an eye check against the screenshots.
@@ -46,16 +46,18 @@ Install `ping-dev-release-TESTKEY.apk` (signed with a throwaway key, installs ne
 Solid; Glass strong 62 %; Glass medium 62 %; Glass soft 62 %; Glass strong 95 %; edge off. Use "Copy all results" and paste them to me.
 Read: p95/p99 under the budget (16.7 ms at 60 Hz, 8.3 ms at 120 Hz) and a low "over budget" percentage = steady. Don't use the debug APK for numbers.
 
-## Glass frame-time result (user's phone, 7 Nov 2026, "Full comparison")
-Median of 3 interleaved rounds, 8 s each, after warm-up, 90 Hz, synthetic 2,000-row list.
-Solid: avg 8.69 ms, p99 15.33, GPU p95 2.73, missed 0.1%.
-Glass 28/18/10 px at 67%: avg 13.4-13.9 ms, p99 16.3-16.5, GPU p95 9.2-9.9, missed 0.1%.
-Glass holds a steady frame rate, costs about +5 ms/frame (+7 ms GPU), cost does not depend on blur radius.
-Risks: little GPU headroom, real rows will cost more, battery not measured.
-Decision: keep glass as built (default stays Solid); re-measure on the real inbox in Phase 3 and in Phase 7.
+## Glass frame-time result (user's phone, 7 Nov 2026, ping-dev-release-TESTKEY-v2, "Full comparison")
+Median of 3 interleaved rounds, 8 s each, after a 4 s warm-up, 90 Hz display, synthetic 2,000-row list:
 
-## CI result (7 Nov 2026)
-Workflow "Build native Ping (Kotlin)" is green on runs #1 and #2. Artifacts ping-native-dev-release-apk and ping-native-prod-release-apk
-are RELEASE builds (signed with the PING_KEY* secrets; the verify step also checked package names, dev read-only permissions and one shared certificate).
-Still to verify in Phase 7: that this certificate equals the one on the Ping installed today (apksigner --print-certs on both).
-A Node.js 20 deprecation warning appears (tool versions, not a failure).
+| Setting | avg ms | p95 | p99 | GPU p95 | missed own deadline |
+|---|---|---|---|---|---|
+| Solid | 8.69 | 12.83 | 15.33 | 2.73 | 0.1 % |
+| Glass 28 px 67 % | 13.42 | 15.58 | 16.46 | 9.18 | 0.1 % |
+| Glass 18 px 67 % | 13.88 | 15.49 | 16.33 | 9.94 | 0.1 % |
+| Glass 10 px 67 % | 13.94 | 15.53 | 16.42 | 9.89 | 0.1 % |
+
+Reading: glass holds a steady frame rate here (no more frames missed than solid). It costs about +5 ms per frame and about +7 ms GPU (p95 about 9-10 ms,
+close to the 11.1 ms 90 Hz interval), and the cost does NOT depend on the blur radius (28 px was not worse than 10 px). The earlier noisy run (blur 28 px "bad")
+was warm-up and heat. Risks: little GPU headroom; the real inbox rows (shadows, photos) will cost more than the synthetic ones; battery use not measured;
+the "deadline" values (24.8 / 35.9 ms) are pipeline deadlines, so glass probably queues more frames (my reading, untested).
+Decision: keep glass as built (default stays Solid like today); re-measure on the real inbox in Phase 3 and with Macrobenchmark in Phase 7.

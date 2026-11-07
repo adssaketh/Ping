@@ -82,7 +82,8 @@ glass fades from the screen edge (`InboxColumn.tsx:72-82`). (Edge effect itself 
 ## 5. Typography
 
 Body stack: `'Google Sans', 'Google Sans Text', 'Roboto Flex', Roboto, system-ui, ...` (`index.css:85-86`), no font files bundled.
-**Which face the phone resolved is UNKNOWN** (see handoff). Tailwind sizes: xs 12/16, sm 14/20, base 16/24, lg 18/28, xl 20/28, 2xl 24/32;
+**Resolved on the user's phone (OnePlus 13R, ColorOS 17, Android 17):** none of the four named fonts is installed as a separate font, so the old app showed the system font **One Sans** (proprietary). Native: same stack via `DeviceFontFamilyName`, nothing bundled (`PingFonts`).
+Tailwind sizes: xs 12/16, sm 14/20, base 16/24, lg 18/28, xl 20/28, 2xl 24/32;
 custom `text-[10px]`, `text-[10.5px]`, `text-[11px]` (line-height inherits the 1.5 body default). Weights: medium 500, semibold 600, bold 700.
 Kotlin uses `sp` (follows the phone's font scale); whether the WebView followed it is **unknown** (screenshots look like scale 1.0).
 

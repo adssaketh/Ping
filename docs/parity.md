@@ -6,7 +6,7 @@ Nothing is "verified" in Phase 1: no screen of the native app has been run on th
 | Screen / component | Old source | Native | Status | Notes |
 |---|---|---|---|---|
 | Theme: System/Light/Dark + Material You | `dynamicColor.ts`, `ThemePicker.tsx` | `theme/` | built | Colour maths proven by golden tests; visual check on phone pending |
-| Fonts | `index.css:85` | `PingFonts` | built (interim) | Face unknown, asks the phone for the same stack |
+| Fonts | `index.css:85` | `PingFonts` | built | Same stack, system font (One Sans on the user's phone); device-checked with the Font check screen |
 | Icons (69 lucide) | lucide-react 0.546 | `ui/icons` | built | Generated from the same SVG data |
 | Avatar circle + colour hash | `AvatarCircle.tsx`, `smsUtils.ts` | `AvatarCircle` | built | Hash/initials golden-tested (236 + 9 cases); matches screenshots (AX purple, JD orange, VM brown, JA indigo) |
 | Skeleton + top progress | `Skeleton.tsx` | `Skeleton.kt` | built | |

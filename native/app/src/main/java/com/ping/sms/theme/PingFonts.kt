@@ -6,15 +6,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 
 /**
- * INTERIM typography (Phase 1). The old app bundles NO font files: its CSS stack is
+ * Typography decision (Phase 1, confirmed on the user's OnePlus 13R, ColorOS 17, Android 17, 7 Nov 2026).
+ * The old app bundles NO font files: its CSS stack is
  *   'Google Sans', 'Google Sans Text', 'Roboto Flex', Roboto, system-ui, ...
- * so the screenshots show whichever of those the phone resolved. Until we know which one that was (open question in
- * docs/handoff/phase-1.md), we ask the phone for the same stack in the same order. On the user's phone this should give
- * the same face the WebView used. When the face is identified we bundle the matching licensed font and delete this.
+ * so every phone shows its own system font. The on-device Font check showed that on this phone none of those four names
+ * is a separate font (all resolve to the system default, One Sans, a proprietary OnePlus font that cannot be bundled).
+ * The native app therefore asks the phone for the SAME stack in the SAME order: identical to today on this phone, and on a
+ * phone that does have Google Sans (e.g. a Pixel) it picks that, exactly like the old app. No font is bundled.
+ * (Changing to one bundled open font such as Roboto Flex would change how Ping looks on the user's phone: not done.)
  */
 object PingFonts {
-    // Compose allows one DeviceFontFamilyName per Font entry; the CSS fallbacks are chained through FontFamily
-    // fallbacks by listing them after, so a missing first name falls to the next.
     val FullStack: FontFamily = FontFamily(
         listOf("Google Sans", "Google Sans Text", "Roboto Flex", "Roboto").flatMap { name ->
             listOf(FontWeight.Normal, FontWeight.Medium, FontWeight.SemiBold, FontWeight.Bold).map { w ->
