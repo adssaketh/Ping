@@ -53,3 +53,9 @@ Glass 28/18/10 px at 67%: avg 13.4-13.9 ms, p99 16.3-16.5, GPU p95 9.2-9.9, miss
 Glass holds a steady frame rate, costs about +5 ms/frame (+7 ms GPU), cost does not depend on blur radius.
 Risks: little GPU headroom, real rows will cost more, battery not measured.
 Decision: keep glass as built (default stays Solid); re-measure on the real inbox in Phase 3 and in Phase 7.
+
+## CI result (7 Nov 2026)
+Workflow "Build native Ping (Kotlin)" is green on runs #1 and #2. Artifacts ping-native-dev-release-apk and ping-native-prod-release-apk
+are RELEASE builds (signed with the PING_KEY* secrets; the verify step also checked package names, dev read-only permissions and one shared certificate).
+Still to verify in Phase 7: that this certificate equals the one on the Ping installed today (apksigner --print-certs on both).
+A Node.js 20 deprecation warning appears (tool versions, not a failure).
